@@ -73,7 +73,11 @@ TashevOS can keep an **encrypted work checkpoint** in a private Git remote so an
 # once per device
 tash sync init --remote git@github.com:YOU/tashevos-state.git
 
-# before stopping or switching devices
+# enable automatic checkpoints for this project
+tash autosync add /path/to/project --task "finish the billing refactor"
+tash autosync install --interval 300
+
+# manual checkpoint is still available at any time
 tash checkpoint "finish the billing refactor"
 
 # on another clone/device
@@ -83,6 +87,8 @@ tash resume
 ```
 
 The recovery key is generated locally and never written to the vault. Retrieve it only when enrolling another trusted device with `tash sync key`. The remote stores an AES-256-GCM + scrypt encrypted payload; Git history gives you previous checkpoint versions.
+
+**Autosync is change-aware:** it fingerprints the Git HEAD, staged changes, unstaged changes and safe untracked files. Unchanged states are skipped, secret-like untracked files do not trigger a checkpoint, and a manual checkpoint is not duplicated by the next background pass. The built-in service installer uses macOS `launchd` or a Linux user `systemd` timer; other platforms can schedule `tash autosync tick`.
 
 ## What works today
 
@@ -156,6 +162,12 @@ This is the foundation for switching between Claude, Codex, Cursor, Gemini and f
 | `tash doctor [path]` | Inspect continuity/integration health |
 | `tash doctor --fix` | Repair safe TashevOS integration issues |
 | `tash heal [path]` | Run the current safe-healing pass |
+| `tash checkpoint [task]` | Save an encrypted cross-device work checkpoint |
+| `tash resume [path]` | Restore the latest checkpoint |
+| `tash sync init/status/key` | Configure and inspect the encrypted vault |
+| `tash autosync add [path]` | Register a project for automatic checkpoints |
+| `tash autosync install --interval 300` | Install the background scheduler |
+| `tash autosync status` | Show registered projects and last result |
 
 ## Project memory
 

@@ -26,3 +26,5 @@ Supported security updates will initially target the latest alpha/minor line whi
 - `.env*`, common credential files and private-key formats are excluded from untracked-file capture before encryption.
 - Raw session directories (`.tashevos/sessions`) are never included in checkpoints.
 - `resume` refuses to overwrite a dirty worktree by default; `--force` first creates a Git rescue stash.
+- Background autosync fingerprints only checkpoint-eligible state; secret-like untracked files are excluded before fingerprinting and therefore do not trigger uploads.
+- Autosync uses a process lock to prevent overlapping scheduler/manual passes and skips identical or already-manually-saved remote fingerprints.

@@ -14,7 +14,7 @@ const block = [
   "3. Check Git state before editing and do not overwrite unrelated or concurrent work.",
   "4. Treat Git, files, tests and runtime evidence as stronger than remembered agent claims.",
   "5. After changes, run relevant verification and leave a state another agent can continue.",
-  "6. When TashevOS sync is configured, run `tash checkpoint \"<current task / next step>\"` before handing off or stopping work.",
+  "6. Keep TashevOS autosync enabled when available; before handing off, verify `tash autosync status` or create a manual `tash checkpoint` if background sync is unavailable.",
   "",
   "Never place secrets or private credentials into TashevOS tracked memory.",
   END

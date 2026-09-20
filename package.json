@@ -1,13 +1,18 @@
 {
   "name": "tashevos",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "The open control plane for AI coding.",
   "type": "module",
   "bin": {
     "tash": "dist/cli.js",
     "tashevos": "dist/cli.js"
   },
-  "files": ["dist", "README.md", "LICENSE", "docs/assets"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "docs/assets"
+  ],
   "scripts": {
     "dev": "npm run build && node dist/cli.js",
     "build": "tsc -p tsconfig.json",
@@ -17,8 +22,20 @@
     "start": "node dist/cli.js",
     "prepublishOnly": "npm run check"
   },
-  "engines": { "node": ">=20" },
-  "keywords": ["ai","coding-agents","agent-memory","context-engineering","mcp","claude","codex","cursor","gemini"],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "ai",
+    "coding-agents",
+    "agent-memory",
+    "context-engineering",
+    "mcp",
+    "claude",
+    "codex",
+    "cursor",
+    "gemini"
+  ],
   "license": "AGPL-3.0-only",
   "dependencies": {
     "commander": "^14.0.3",
