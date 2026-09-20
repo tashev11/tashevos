@@ -1,0 +1,63 @@
+name: Publisher Hub
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tashevos-publisher
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Publish latest releases
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+          HASHNODE_PAT: ${{ secrets.HASHNODE_PAT }}
+          HASHNODE_PUBLICATION_ID: ${{ secrets.HASHNODE_PUBLICATION_ID }}
+          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+          LINKEDIN_AUTHOR_URN: ${{ secrets.LINKEDIN_AUTHOR_URN }}
+          LINKEDIN_VERSION: ${{ vars.LINKEDIN_VERSION }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_PUBLIC_BASE_URL: ${{ vars.TELEGRAM_PUBLIC_BASE_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          BLUESKY_HANDLE: ${{ vars.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          BLUESKY_SERVICE: ${{ vars.BLUESKY_SERVICE }}
+          MASTODON_BASE_URL: ${{ vars.MASTODON_BASE_URL }}
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+          MASTODON_VISIBILITY: ${{ vars.MASTODON_VISIBILITY }}
+          X_USER_ACCESS_TOKEN: ${{ secrets.X_USER_ACCESS_TOKEN }}
+          X_API_URL: ${{ vars.X_API_URL }}
+          WORDPRESS_BASE_URL: ${{ vars.WORDPRESS_BASE_URL }}
+          WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
+          WORDPRESS_APP_PASSWORD: ${{ secrets.WORDPRESS_APP_PASSWORD }}
+          WORDPRESS_STATUS: ${{ vars.WORDPRESS_STATUS }}
+          PUBLISHER_WEBHOOK_URL: ${{ vars.PUBLISHER_WEBHOOK_URL }}
+          PUBLISHER_WEBHOOK_TOKEN: ${{ secrets.PUBLISHER_WEBHOOK_TOKEN }}
+        run: node integrations/publisher/src/publisher.mjs
+      - name: Persist publisher state and outbox
+        run: |
+          if git diff --quiet -- .tashevos/publisher-state.json .tashevos/publisher-outbox; then
+            echo "No publisher state changes"
+            exit 0
+          fi
+          git config user.name "tashevos-publisher[bot]"
+          git config user.email "tashevos-publisher[bot]@users.noreply.github.com"
+          git add .tashevos/publisher-state.json .tashevos/publisher-outbox
+          git commit -m "chore(publisher): update publication state"
+          git push

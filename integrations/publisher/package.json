@@ -1,0 +1,15 @@
+{
+  "name": "@tashevos/publisher",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "publish": "node src/publisher.mjs",
+    "dry-run": "node src/publisher.mjs --dry-run",
+    "test": "node --test test/*.test.mjs",
+    "check": "npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

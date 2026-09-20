@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "maxReleaseAgeDays": 30,
+  "sources": [
+    {
+      "repo": "tashev11/tashevos",
+      "displayName": "TashevOS",
+      "includePrereleases": true,
+      "tags": [
+        "ai",
+        "opensource",
+        "devtools"
+      ]
+    },
+    {
+      "repo": "tashev11/tashev-relay",
+      "displayName": "Tashev Relay",
+      "includePrereleases": true,
+      "tags": [
+        "ai",
+        "devtools",
+        "agents"
+      ]
+    },
+    {
+      "repo": "tashev11/tashev-proof",
+      "displayName": "Tashev Proof",
+      "includePrereleases": true,
+      "tags": [
+        "ai",
+        "testing",
+        "devtools"
+      ]
+    },
+    {
+      "repo": "tashev11/tashev-crew",
+      "displayName": "Tashev Crew",
+      "includePrereleases": true,
+      "tags": [
+        "ai",
+        "agents",
+        "devtools"
+      ]
+    }
+  ],
+  "platforms": {
+    "reddit": {
+      "enabled": true,
+      "mode": "delegated",
+      "note": "Handled by integrations/reddit-devvit."
+    },
+    "devto": {
+      "enabled": true,
+      "mode": "direct"
+    },
+    "hashnode": {
+      "enabled": true,
+      "mode": "direct"
+    },
+    "linkedin": {
+      "enabled": true,
+      "mode": "direct"
+    },
+    "telegram": {
+      "enabled": true,
+      "mode": "direct"
+    },
+    "discord": {
+      "enabled": true,
+      "mode": "direct"
+    },
+    "bluesky": {
+      "enabled": true,
+      "mode": "direct"
+    },
+    "mastodon": {
+      "enabled": true,
+      "mode": "direct"
+    },
+    "x": {
+      "enabled": false,
+      "mode": "direct",
+      "note": "Adapter is present but remains disabled until API access is verified for the account."
+    },
+    "wordpress": {
+      "enabled": false,
+      "mode": "direct"
+    },
+    "webhook": {
+      "enabled": false,
+      "mode": "direct"
+    },
+    "hackernews": {
+      "enabled": true,
+      "mode": "manual"
+    },
+    "producthunt": {
+      "enabled": true,
+      "mode": "manual"
+    },
+    "peerlist": {
+      "enabled": true,
+      "mode": "manual"
+    },
+    "indiehackers": {
+      "enabled": true,
+      "mode": "manual"
+    },
+    "hackernoon": {
+      "enabled": true,
+      "mode": "manual"
+    },
+    "dzone": {
+      "enabled": true,
+      "mode": "manual"
+    },
+    "dailydev": {
+      "enabled": true,
+      "mode": "manual"
+    },
+    "medium": {
+      "enabled": true,
+      "mode": "manual"
+    },
+    "lobsters": {
+      "enabled": true,
+      "mode": "manual"
+    }
+  }
+}
