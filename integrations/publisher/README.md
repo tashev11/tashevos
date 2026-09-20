@@ -78,6 +78,6 @@ A live run creates/updates `.tashevos/publisher-state.json`. A successful or out
 
 ## GitHub Actions
 
-`.github/workflows/publisher.yml` is ready for a 15-minute schedule plus manual runs. If Actions are unavailable for the repository, the same command can run from a trusted local scheduler without changing the publication model.
+`.github/workflows/publisher.yml` is ready for a 15-minute schedule plus manual runs. If GitHub cannot allocate hosted runners, `tools/install-macos.sh` installs an equivalent 15-minute `launchd` scheduler using a dedicated clone.
 
-Do not commit platform tokens. Add them as repository Actions secrets only. See [../../docs/PUBLISHER_SETUP.md](../../docs/PUBLISHER_SETUP.md) for the exact setup checklist.
+Do not commit platform tokens. Use repository Actions secrets when GitHub Actions is available, or the private local file `~/.config/tashevos/publisher.env` for the macOS fallback. See [../../docs/PUBLISHER_SETUP.md](../../docs/PUBLISHER_SETUP.md) for the exact setup checklist.
