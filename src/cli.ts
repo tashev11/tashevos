@@ -12,8 +12,10 @@ import { compileContext } from "./core/context.js";
 import { createCheckpoint, getSyncKey, getSyncStatus, initializeSync, resumeCheckpoint } from "./core/sync.js";
 import { autosyncProjectKey, getAutosyncStatus, installAutosyncService, registerAutosyncProject, runAutosyncTick, setAutosyncInterval, uninstallAutosyncService, unregisterAutosyncProject } from "./core/autosync.js";
 import { configureRedditBridge, getRedditBridgeStatus, importRedditCredentialsFromEnv, installRedditBridgeService, runRedditBridgeTick, uninstallRedditBridgeService } from "./core/reddit.js";
+import { serveTashevMcp } from "./core/mcp.js";
+import { recordHandoff } from "./core/handoff.js";
 
-const VERSION = "0.1.0-alpha.2";
+const VERSION = "0.1.0-alpha.3";
 const program = new Command();
 
 program.name("tash")
@@ -91,6 +93,30 @@ program.command("context")
     const root = findProjectRoot(options.path);
     console.log(compileContext(root, task.join(" ")));
     appendEvent(root, "context.compiled", { task: task.join(" ") });
+  });
+
+program.command("handoff")
+  .argument("<task...>", "what the next agent should continue")
+  .option("-p, --path <path>", "project path", process.cwd())
+  .option("--summary <summary>", "short summary of work completed")
+  .option("--next <nextStep>", "next concrete step")
+  .option("--blockers <blockers>", "known blockers")
+  .option("--status <status>", "active, paused or completed", "active")
+  .description("Record a durable handoff for another AI or a new chat")
+  .action((task: string[], options: { path: string; summary?: string; next?: string; blockers?: string; status: string }) => {
+    if (!["active", "paused", "completed"].includes(options.status)) throw new Error("Status must be active, paused or completed.");
+    const root = findProjectRoot(options.path);
+    const result = recordHandoff(root, {
+      task: task.join(" "),
+      summary: options.summary,
+      nextStep: options.next,
+      blockers: options.blockers,
+      status: options.status as "active" | "paused" | "completed"
+    });
+    console.log(pc.bold("TashevOS handoff recorded"));
+    console.log("Project: " + root);
+    console.log("Task: " + result.task);
+    console.log("Next: " + result.nextStep);
   });
 
 program.command("doctor")
@@ -315,6 +341,14 @@ autosync.command("uninstall")
     console.log(uninstallAutosyncService() ? "Autosync service removed" : "Autosync service was not installed");
   });
 
+
+const mcp = program.command("mcp").description("Expose TashevOS continuity through Model Context Protocol");
+
+mcp.command("serve")
+  .description("Start the TashevOS MCP stdio server")
+  .action(async () => {
+    await serveTashevMcp();
+  });
 
 const reddit = program.command("reddit").description("Automate GitHub ↔ Reddit releases and feedback");
 
