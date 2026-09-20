@@ -1,0 +1,5 @@
+# Local/private TashevOS runtime data
+local/
+cache/
+sessions/
+state/current.json

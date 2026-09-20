@@ -40,6 +40,11 @@ export function initializeStore(root: string): void {
   if (!existsSync(guardrails)) {
     writeFileSync(guardrails, "# Guardrails\n\n- Never expose secrets.\n- Prefer verified Git/files/test evidence over agent claims.\n- Do not rewrite unrelated areas of the project.\n", "utf8");
   }
+
+  const ignore = join(base, ".gitignore");
+  if (!existsSync(ignore)) {
+    writeFileSync(ignore, "# Local/private TashevOS runtime data\nlocal/\ncache/\nsessions/\nstate/current.json\n", "utf8");
+  }
 }
 
 export function appendEvent(root: string, type: string, data: Record<string, unknown> = {}, agent?: string): EventRecord {
