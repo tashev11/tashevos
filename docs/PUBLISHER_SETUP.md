@@ -111,10 +111,22 @@ These are intentionally kept in the reviewed outbox instead of blind auto-postin
 
 ## First activation
 
-1. Merge the Publisher Hub changes to `main`.
-2. Add credentials for any direct platforms you want active.
-3. Run **Actions → Publisher Hub → Run workflow** once.
-4. Inspect `.tashevos/publisher-state.json`.
-5. Future checks run every 15 minutes automatically.
+1. Add credentials for any direct platforms you want active.
+2. If GitHub-hosted runners are available, run **Actions → Publisher Hub → Run workflow** once.
+3. Inspect `.tashevos/publisher-state.json`.
+4. Future checks run every 15 minutes automatically.
 
 Missing credentials are safe: that channel is marked `blocked`, while every other configured channel continues. Once the secret is added, the next run retries it automatically.
+
+## macOS fallback when GitHub Actions cannot start
+
+GitHub may refuse to allocate a runner because of account/billing state. Publisher Hub can run from a trusted Mac without changing the GitHub-release source of truth:
+
+```bash
+cd /path/to/tashevos
+zsh integrations/publisher/tools/install-macos.sh
+```
+
+The installer creates a dedicated clone under `~/.local/share/tashevos-publisher/repo`, a private credentials file at `~/.config/tashevos/publisher.env`, and a `launchd` job that runs every 15 minutes. The runner pulls `main`, publishes, commits only Publisher Hub state/outbox changes, rebases, and pushes them back to GitHub.
+
+Edit `~/.config/tashevos/publisher.env` to add platform credentials. Do not put those values into the tracked `.env.example`.

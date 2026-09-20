@@ -105,7 +105,7 @@ The original local OAuth transport remains available through `tash reddit init/a
 
 TashevOS can also distribute GitHub releases across developer-facing channels from one deduplicated pipeline. Direct API adapters cover DEV.to, Hashnode, LinkedIn, Telegram, Discord, Bluesky and Mastodon; Reddit stays on the existing Devvit bridge. Platforms where blind API posting is unavailable or inappropriate automatically receive ready-to-publish drafts instead of brittle browser automation.
 
-The configuration lives in `.tashevos/publisher.json`, state is tracked in `.tashevos/publisher-state.json`, and the scheduled workflow is `.github/workflows/publisher.yml`. See [docs/PUBLISHER_HUB.md](docs/PUBLISHER_HUB.md) and [integrations/publisher](integrations/publisher).
+The configuration lives in `.tashevos/publisher.json`, state is tracked in `.tashevos/publisher-state.json`, and the scheduled workflow is `.github/workflows/publisher.yml`. A macOS `launchd` fallback is included for accounts where GitHub-hosted runners are unavailable. See [docs/PUBLISHER_HUB.md](docs/PUBLISHER_HUB.md), [docs/PUBLISHER_SETUP.md](docs/PUBLISHER_SETUP.md) and [integrations/publisher](integrations/publisher).
 
 ## Cross-device continuity
 
