@@ -56,6 +56,33 @@ tash doctor /path/to/project
 tash context "продолжи задачу, которую делал предыдущий AI" --path /path/to/project
 ```
 
+## Автоматизация Reddit ↔ GitHub
+
+TashevOS может в фоне связывать релизы GitHub с Reddit и возвращать полезную обратную связь обратно в разработку:
+
+```text
+GitHub Release
+      ↓
+разрешённые сабреддиты
+      ↓
+bug / feature feedback
+      ↓
+GitHub Issues
+      ↓
+Issue закрыт → один ответ в исходный Reddit-комментарий
+```
+
+Мост работает только по allowlist сабреддитов, перед новой публикацией проверяет их правила, не дублирует один релиз, явно сообщает об автоматической публикации, не голосует и не отправляет личные сообщения. OAuth-данные хранятся только локально.
+
+```bash
+tash reddit init --repo OWNER/REPO --bot BOT_USERNAME --subreddit opensource SideProject
+tash reddit auth
+tash reddit tick
+tash reddit install
+```
+
+До включения нужен один внешний шаг: одобренное Reddit-приложение/API-доступ и OAuth-данные отдельного app/bot аккаунта. После этого сервис может работать без ручных публикаций. Подробнее: [docs/REDDIT_BRIDGE.md](docs/REDDIT_BRIDGE.md).
+
 ## Непрерывность между устройствами
 
 TashevOS умеет сохранять **зашифрованную рабочую точку** в приватный Git-репозиторий. На другом доверенном устройстве можно восстановить тот же commit/ветку, staged и unstaged изменения, а также безопасные untracked-файлы. `.env*`, приватные ключи и файлы учётных данных исключаются до шифрования; сырые AI-сессии по-прежнему остаются только локально.
@@ -138,6 +165,8 @@ TashevOS должен отвечать не просто «что запомни
 | `tash doctor [path]` | Проверить здоровье интеграции |
 | `tash doctor --fix` | Исправить безопасные проблемы TashevOS |
 | `tash heal [path]` | Запустить текущий safe-heal |
+| `tash reddit init/auth/status` | Настроить и проверить мост Reddit ↔ GitHub |
+| `tash reddit tick/install` | Запустить синхронизацию разово или в фоне |
 
 ## Память проекта
 

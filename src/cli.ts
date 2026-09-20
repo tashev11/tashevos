@@ -11,6 +11,7 @@ import { runDoctor } from "./core/doctor.js";
 import { compileContext } from "./core/context.js";
 import { createCheckpoint, getSyncKey, getSyncStatus, initializeSync, resumeCheckpoint } from "./core/sync.js";
 import { autosyncProjectKey, getAutosyncStatus, installAutosyncService, registerAutosyncProject, runAutosyncTick, setAutosyncInterval, uninstallAutosyncService, unregisterAutosyncProject } from "./core/autosync.js";
+import { configureRedditBridge, getRedditBridgeStatus, importRedditCredentialsFromEnv, installRedditBridgeService, runRedditBridgeTick, uninstallRedditBridgeService } from "./core/reddit.js";
 
 const VERSION = "0.1.0-alpha.2";
 const program = new Command();
@@ -312,6 +313,90 @@ autosync.command("uninstall")
   .description("Remove the background autosync service without deleting checkpoints or project registrations")
   .action(() => {
     console.log(uninstallAutosyncService() ? "Autosync service removed" : "Autosync service was not installed");
+  });
+
+
+const reddit = program.command("reddit").description("Automate GitHub ↔ Reddit releases and feedback");
+
+reddit.command("init")
+  .requiredOption("--repo <owner/name>", "GitHub repository to mirror")
+  .requiredOption("--bot <username>", "dedicated Reddit app/bot username")
+  .requiredOption("--subreddit <names...>", "allowlisted subreddit(s)")
+  .option("--interval <seconds>", "seconds between background checks", "1800")
+  .option("--no-auto-publish", "do not publish releases automatically")
+  .option("--no-issues", "do not mirror Reddit bug/feature feedback into GitHub Issues")
+  .description("Configure the Reddit/GitHub bridge")
+  .action((options: { repo: string; bot: string; subreddit: string[]; interval: string; autoPublish: boolean; issues: boolean }) => {
+    const seconds = Number(options.interval);
+    if (!Number.isFinite(seconds)) throw new Error("Reddit bridge interval must be a number.");
+    const config = configureRedditBridge({
+      repository: options.repo,
+      botUsername: options.bot,
+      subreddits: options.subreddit,
+      intervalSeconds: seconds,
+      autoPublish: options.autoPublish,
+      syncIssues: options.issues
+    });
+    console.log(pc.bold("TashevOS Reddit bridge configured"));
+    console.log("Repository: " + config.repository);
+    console.log("Bot: u/" + config.botUsername);
+    console.log("Subreddits: " + config.subreddits.map((name) => "r/" + name).join(", "));
+    console.log("Interval: " + config.intervalSeconds + "s");
+    console.log(pc.dim("Next: export Reddit OAuth credentials, then run `tash reddit auth`."));
+  });
+
+reddit.command("auth")
+  .description("Import Reddit OAuth credentials from environment variables into a local 0600 file")
+  .action(() => {
+    const path = importRedditCredentialsFromEnv();
+    console.log(pc.bold("Reddit credentials imported"));
+    console.log(pc.dim(path));
+  });
+
+reddit.command("tick")
+  .description("Run one Reddit/GitHub synchronization pass")
+  .action(async () => {
+    const result = await runRedditBridgeTick();
+    for (const item of result.published) console.log(pc.green("published ") + item);
+    for (const item of result.skipped) console.log(pc.yellow("skipped ") + item);
+    for (const item of result.issues) console.log(pc.green("issue ") + item);
+    for (const item of result.closedReplies) console.log(pc.green("closed-reply ") + item);
+    if (!result.published.length && !result.skipped.length && !result.issues.length && !result.closedReplies.length) {
+      console.log("Reddit bridge: no new work");
+    }
+  });
+
+reddit.command("status")
+  .description("Show Reddit/GitHub bridge configuration and local state")
+  .action(() => {
+    const status = getRedditBridgeStatus();
+    console.log(pc.bold("TashevOS Reddit bridge"));
+    console.log("Repository: " + status.config.repository);
+    console.log("Bot: u/" + status.config.botUsername);
+    console.log("Subreddits: " + status.config.subreddits.map((name) => "r/" + name).join(", "));
+    console.log("Credentials: " + (status.credentialsConfigured ? pc.green("configured") : pc.yellow("missing")));
+    console.log("Auto publish: " + (status.config.autoPublish ? "yes" : "no"));
+    console.log("Issue sync: " + (status.config.syncIssues ? "yes" : "no"));
+    console.log("Posts tracked: " + Object.keys(status.state.posts).length);
+    console.log("Feedback mirrored: " + Object.keys(status.state.comments).length);
+    console.log("Last run: " + (status.state.lastRunAt || "never"));
+    if (status.state.lastError) console.log(pc.yellow("Last error: " + status.state.lastError));
+  });
+
+reddit.command("install")
+  .description("Install the background Reddit/GitHub bridge service")
+  .action(() => {
+    const result = installRedditBridgeService();
+    console.log(pc.bold("TashevOS Reddit bridge service installed"));
+    console.log("Service: " + result.platform);
+    console.log("Interval: " + result.intervalSeconds + "s");
+    console.log("Config: " + result.servicePath);
+  });
+
+reddit.command("uninstall")
+  .description("Remove the background Reddit/GitHub bridge service")
+  .action(() => {
+    console.log(uninstallRedditBridgeService() ? "Reddit bridge service removed" : "Reddit bridge service was not installed");
   });
 
 program.parseAsync(process.argv);

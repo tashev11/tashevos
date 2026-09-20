@@ -65,6 +65,34 @@ tash doctor /path/to/your/project
 tash context "fix admin notifications" --path /path/to/your/project
 ```
 
+
+## Reddit ↔ GitHub automation
+
+TashevOS includes an optional background bridge for open-source project growth and feedback loops:
+
+```text
+GitHub Release
+      ↓
+allowlisted Reddit communities
+      ↓
+bug / feature feedback
+      ↓
+GitHub Issues
+      ↓
+closed Issue → one reply to the originating Reddit comment
+```
+
+The bridge checks subreddit rules before a release post, deduplicates releases, discloses that posts are automated, never votes or sends DMs, and stores OAuth credentials only in the local TashevOS home.
+
+```bash
+tash reddit init --repo OWNER/REPO --bot BOT_USERNAME --subreddit opensource SideProject
+tash reddit auth
+tash reddit tick
+tash reddit install
+```
+
+The one-time Reddit app/API approval and credentials must exist before activation. See [docs/REDDIT_BRIDGE.md](docs/REDDIT_BRIDGE.md).
+
 ## Cross-device continuity
 
 TashevOS can keep an **encrypted work checkpoint** in a private Git remote so another trusted device can continue from the same Git commit **including staged changes, unstaged changes and safe untracked files**. Secret-like files such as `.env*`, private keys and credential files are excluded before encryption. Raw AI sessions remain local-only.
@@ -168,6 +196,8 @@ This is the foundation for switching between Claude, Codex, Cursor, Gemini and f
 | `tash autosync add [path]` | Register a project for automatic checkpoints |
 | `tash autosync install --interval 300` | Install the background scheduler |
 | `tash autosync status` | Show registered projects and last result |
+| `tash reddit init/auth/status` | Configure and inspect the Reddit ↔ GitHub bridge |
+| `tash reddit tick/install` | Run once or install the background Reddit bridge |
 
 ## Project memory
 
