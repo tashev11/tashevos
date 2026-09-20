@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "mode": "local-first",
+  "contextBudget": 6000,
+  "autoHeal": "safe",
+  "rawSessions": "local-only"
+}

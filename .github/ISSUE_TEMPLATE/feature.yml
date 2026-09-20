@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose a capability or AI adapter
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Memory
+        - Context compiler
+        - Doctor / auto-healing
+        - AI adapter
+        - MCP / protocol
+        - Multi-agent safety
+        - Token / cost telemetry
+        - Security / privacy
+        - Other

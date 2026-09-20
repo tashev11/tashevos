@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# TashevOS local/private runtime data
+.tashevos/local/
+.tashevos/cache/
+.tashevos/sessions/
+.tashevos/state/current.json
