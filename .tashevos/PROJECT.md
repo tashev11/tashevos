@@ -9,7 +9,7 @@ TashevOS is a local-first control plane for AI coding agents: one project memory
 
 ## Layout
 - src/cli.ts: the `tash` CLI with init, status, agents, scan, context, doctor and heal.
-- src/core/: agents (detection), instructions (managed blocks), store (events and state), context (packets), doctor, scanner.
+- src/core/: agents (detection), instructions (managed blocks), store (events and state), context (packets), doctor, scanner, sync/autosync and the optional Reddit ↔ GitHub bridge.
 - src/lib/: fs and git helpers.
 - packages/sdk/: adapter SDK types under Apache-2.0. The core is AGPL-3.0-only.
 - docs/: principles, memory model, compatibility and auto-healing design.
