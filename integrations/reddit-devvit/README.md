@@ -76,11 +76,31 @@ npm run dev
 ```
 
 The project currently uses `r/tashev_os_dev` as its playtest subreddit. The live playtest validated a four-repository scheduler pass with two already-seen releases and two repositories without a release.
+## External HTTP access
+
+The app requests server-side HTTP access only to `api.github.com`.
+
+It uses that domain to:
+
+- read public release metadata from configured repositories;
+- create GitHub Issues from actionable Reddit feedback;
+- read Issue state so the originating Reddit thread can be updated;
+- close Issues only during explicit integration testing; normal production code does not auto-close Issues.
+
+No Reddit data is sent to any other external domain.
+
+## Privacy and terms
+
+- [Privacy Policy](PRIVACY.md)
+- [Terms of Use](TERMS.md)
+
+When Reddit feedback is mirrored to GitHub, the GitHub Issue can contain the public Reddit username, public comment text, and links to the relevant Reddit post/comment. See the Privacy Policy for details.
+
 ## Publishing
 
 `npm run deploy` uploads a version after typecheck and lint. `npm run launch` submits the app for Reddit review.
 
-The app requests external HTTP access only to `api.github.com`. Reddit may require review of that domain and public Privacy Policy / Terms before wider installation.
+For broad moderator installation, submit with `npx devvit publish --public`. The app's Developer Settings must contain public URLs for the Privacy Policy and Terms before publishing because the app uses HTTP Fetch.
 
 ## Dependency note
 
