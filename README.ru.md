@@ -56,6 +56,20 @@ tash doctor /path/to/project
 tash context "продолжи задачу, которую делал предыдущий AI" --path /path/to/project
 ```
 
+### Подключение AI через MCP
+
+```bash
+# Claude Code — глобально для всех проектов
+claude mcp add --scope user tashevos -- tash mcp serve
+
+# OpenAI Codex — глобальный MCP-сервер
+codex mcp add tashevos -- tash mcp serve
+
+# Gemini CLI: та же command/args-конфигурация в mcpServers файла ~/.gemini/settings.json
+```
+
+MCP-клиенты получают `tashevos_context`, `tashevos_status`, `tashevos_handoff` и `tashevos_checkpoint`. Для AI без MCP остаётся fallback: `tash context` + `tash handoff`.
+
 ## Автоматизация Reddit ↔ GitHub
 
 TashevOS может в фоне связывать релизы GitHub с Reddit и возвращать полезную обратную связь обратно в разработку:
@@ -117,6 +131,8 @@ tash resume
 - локальный event store;
 - managed-блоки в `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`;
 - компактный evidence-first context packet;
+- MCP-сервер `tash mcp serve` с инструментами context/status/handoff/checkpoint;
+- `tash handoff` для фиксации задачи, результата, следующего шага и блокеров;
 - `tash doctor`;
 - безопасный repair для TashevOS-owned файлов;
 - local-first хранение приватных runtime-данных.
@@ -162,6 +178,8 @@ TashevOS должен отвечать не просто «что запомни
 | `tash agents [path]` | Найти AI-инструменты и источники истории |
 | `tash scan [path]` | Определить стек проекта |
 | `tash context [task]` | Собрать компактный контекст |
+| `tash handoff <task>` | Записать точку продолжения для следующего AI/чата |
+| `tash mcp serve` | Запустить stdio MCP-сервер TashevOS |
 | `tash doctor [path]` | Проверить здоровье интеграции |
 | `tash doctor --fix` | Исправить безопасные проблемы TashevOS |
 | `tash heal [path]` | Запустить текущий safe-heal |

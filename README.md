@@ -65,6 +65,19 @@ tash doctor /path/to/your/project
 tash context "fix admin notifications" --path /path/to/your/project
 ```
 
+### Connect MCP-capable AI clients
+
+```bash
+# Claude Code — available in every project
+claude mcp add --scope user tashevos -- tash mcp serve
+
+# OpenAI Codex — global MCP server
+codex mcp add tashevos -- tash mcp serve
+
+# Gemini CLI: add the same command/args under mcpServers in ~/.gemini/settings.json
+```
+
+Compatible clients get `tashevos_context`, `tashevos_status`, `tashevos_handoff` and `tashevos_checkpoint`. Agents without MCP can use `tash context` + `tash handoff` instead.
 
 ## Reddit ↔ GitHub automation
 
@@ -128,6 +141,8 @@ The current alpha already provides:
 - **Local event primitives** — append project-control events locally instead of dumping raw sessions into Git.
 - **Managed agent bootstrap** — idempotent TashevOS blocks for `AGENTS.md`, `CLAUDE.md` and `GEMINI.md`.
 - **Evidence-first context packets** — combine the current Git state, project memory, guardrails and recent TashevOS events.
+- **MCP continuity server** — `tash mcp serve` exposes context, status, handoff and checkpoint tools to compatible AI clients.
+- **Durable handoff** — `tash handoff` updates the canonical `STATE.md` so the next agent can continue from a compact task summary.
 - **Doctor** — inspect Git, TashevOS storage and bootstrap health.
 - **Safe healing primitives** — repair TashevOS-owned metadata/integration files only.
 - **Local-first privacy model** — runtime events and raw session data are ignored by Git by default.
@@ -187,6 +202,8 @@ This is the foundation for switching between Claude, Codex, Cursor, Gemini and f
 | `tash agents [path]` | Detect AI tools and known history sources |
 | `tash scan [path]` | Detect the project stack |
 | `tash context [task]` | Compile a compact evidence-first context packet |
+| `tash handoff <task>` | Record task, summary, next step and blockers for the next agent |
+| `tash mcp serve` | Start the stdio MCP continuity server |
 | `tash doctor [path]` | Inspect continuity/integration health |
 | `tash doctor --fix` | Repair safe TashevOS integration issues |
 | `tash heal [path]` | Run the current safe-healing pass |

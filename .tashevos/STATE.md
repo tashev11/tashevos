@@ -1,8 +1,8 @@
 # Current state
 
-- Status: alpha foundation (v0.1). The CLI, agent detection, event store, context packets and doctor work.
-- Active task: Reddit ↔ GitHub automation bridge merged to main via PR #13 and locally verified (`npm run check`: 13/13 tests passing). Next external step: Reddit app/API approval + dedicated bot OAuth credentials before live activation.
-- Known blockers:
-  - Reddit app/API approval and dedicated bot OAuth credentials are required before live unattended publishing can be activated.
-  - GitHub Actions jobs do not start because the account is locked due to a billing issue. CI stays on workflow_dispatch until that is resolved, then its triggers move to push and pull_request.
-  - The npm alpha package is not published yet.
+- Status: active
+- Active task: ship MCP continuity across AI clients
+- Summary: MCP server, durable handoff, Claude/Codex/Gemini configs and tests are complete
+- Next step: commit, push and merge feat/mcp-continuity; then refresh HEATFIT adapters
+- Known blockers: ChatGPT web cannot directly consume a local stdio MCP without a connector
+- Updated: 2026-09-20T17:28:55.636Z

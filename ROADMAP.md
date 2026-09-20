@@ -31,7 +31,7 @@ The roadmap is capability-driven, not tied to a single AI vendor.
 - [ ] Reproducible retrieval receipts
 
 ## v0.4 — Protocol layer
-- [ ] MCP server
+- [x] MCP server (stdio tools/resources for context, status, handoff and checkpoint)
 - [ ] Hooks for Claude/Gemini and supported clients
 - [ ] Adapter SDK
 - [ ] Capability registry
