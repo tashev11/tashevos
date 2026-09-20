@@ -14,6 +14,7 @@ The roadmap is capability-driven, not tied to a single AI vendor.
 
 ## v0.2 — Universal session harvester
 - [x] Encrypted cross-device checkpoint/resume (Git vault transport)
+- [x] Background change-aware encrypted autosync (macOS launchd / Linux systemd)
 - [ ] Claude Code history importer
 - [ ] Codex history importer
 - [ ] Gemini CLI history importer

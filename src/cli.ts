@@ -10,8 +10,9 @@ import { installInstructionAdapters } from "./core/instructions.js";
 import { runDoctor } from "./core/doctor.js";
 import { compileContext } from "./core/context.js";
 import { createCheckpoint, getSyncKey, getSyncStatus, initializeSync, resumeCheckpoint } from "./core/sync.js";
+import { autosyncProjectKey, getAutosyncStatus, installAutosyncService, registerAutosyncProject, runAutosyncTick, setAutosyncInterval, uninstallAutosyncService, unregisterAutosyncProject } from "./core/autosync.js";
 
-const VERSION = "0.1.0-alpha.1";
+const VERSION = "0.1.0-alpha.2";
 const program = new Command();
 
 program.name("tash")
@@ -219,6 +220,98 @@ sync.command("pull")
     const root = findProjectRoot(path);
     const result = resumeCheckpoint(root, options.force);
     console.log("Resumed: " + result.branch + " @ " + result.head.slice(0, 12));
+  });
+
+
+const autosync = program.command("autosync").description("Automatically checkpoint changed projects in the encrypted vault");
+
+autosync.command("add")
+  .argument("[path]", "project path", process.cwd())
+  .option("--task <task>", "fallback handoff task for automatic checkpoints")
+  .option("--no-initial", "register without creating an immediate checkpoint")
+  .description("Register a project for encrypted background autosync")
+  .action((path: string, options: { task?: string; initial: boolean }) => {
+    const root = findProjectRoot(path);
+    const result = registerAutosyncProject(root, options.task || "", options.initial);
+    console.log(pc.bold("TashevOS autosync project registered"));
+    console.log("Project: " + result.project.path);
+    console.log("Initial checkpoint: " + (result.checkpoint ? result.checkpoint.slice(0, 12) : "skipped"));
+  });
+
+autosync.command("remove")
+  .argument("[path]", "project path", process.cwd())
+  .description("Stop autosyncing a project")
+  .action((path: string) => {
+    const root = findProjectRoot(path);
+    console.log(unregisterAutosyncProject(root) ? "Autosync project removed" : "Project was not registered");
+  });
+
+autosync.command("tick")
+  .description("Run one autosync pass; intended for launchd/systemd and other schedulers")
+  .action(() => {
+    const tick = runAutosyncTick();
+    if (tick.locked) {
+      console.log("Autosync skipped: another pass is already running");
+      return;
+    }
+    if (!tick.results.length) {
+      console.log("Autosync: no registered projects");
+      return;
+    }
+    for (const item of tick.results) {
+      if (item.result === "checkpoint") console.log(`checkpoint ${item.path} ${item.vaultCommit?.slice(0, 12) || ""}`.trim());
+      else if (item.result === "error") console.error(`error ${item.path}: ${item.error}`);
+      else console.log(`${item.result} ${item.path}`);
+    }
+    if (tick.results.some((item) => item.result === "error")) process.exitCode = 1;
+  });
+
+autosync.command("status")
+  .description("Show registered projects and last autosync result")
+  .action(() => {
+    const status = getAutosyncStatus();
+    console.log(pc.bold("TashevOS autosync"));
+    console.log("Interval: " + status.config.intervalSeconds + "s");
+    if (!status.config.projects.length) {
+      console.log("Projects: none");
+      return;
+    }
+    for (const project of status.config.projects) {
+      const key = autosyncProjectKey(project.path);
+      const state = status.states[key];
+      console.log((project.enabled ? "✓ " : "○ ") + project.path);
+      console.log(pc.dim("  last: " + (state?.lastResult || "never") + (state?.lastCheckpointAt ? " @ " + state.lastCheckpointAt : "")));
+      if (state?.lastError) console.log(pc.yellow("  error: " + state.lastError));
+    }
+  });
+
+autosync.command("install")
+  .option("--interval <seconds>", "seconds between checks", "300")
+  .description("Install the background autosync service (macOS launchd / Linux systemd)")
+  .action((options: { interval: string }) => {
+    const seconds = Number(options.interval);
+    if (!Number.isFinite(seconds) || seconds < 60) throw new Error("Autosync interval must be at least 60 seconds.");
+    const result = installAutosyncService(seconds);
+    console.log(pc.bold("TashevOS autosync service installed"));
+    console.log("Service: " + result.platform);
+    console.log("Interval: " + result.intervalSeconds + "s");
+    console.log("Config: " + result.servicePath);
+  });
+
+autosync.command("interval")
+  .argument("<seconds>", "seconds between checks")
+  .description("Change the stored autosync interval; reinstall service to apply scheduler timing")
+  .action((seconds: string) => {
+    const value = Number(seconds);
+    if (!Number.isFinite(value) || value < 60) throw new Error("Autosync interval must be at least 60 seconds.");
+    const config = setAutosyncInterval(value);
+    console.log("Autosync interval: " + config.intervalSeconds + "s");
+  });
+
+autosync.command("uninstall")
+  .description("Remove the background autosync service without deleting checkpoints or project registrations")
+  .action(() => {
+    console.log(uninstallAutosyncService() ? "Autosync service removed" : "Autosync service was not installed");
   });
 
 program.parseAsync(process.argv);

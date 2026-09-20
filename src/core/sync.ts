@@ -47,6 +47,7 @@ interface ContinuityPayload {
   version: number;
   projectId: string;
   createdAt: string;
+  fingerprint?: string;
   task: string;
   repository: string;
   branch: string;
@@ -62,6 +63,7 @@ interface ContinuityPayload {
 
 export interface CheckpointResult {
   projectId: string;
+  fingerprint: string;
   task: string;
   branch: string;
   head: string;
@@ -265,6 +267,36 @@ function listUntracked(root: string): { files: UntrackedFile[]; skipped: string[
   return { files, skipped };
 }
 
+function stateFingerprint(branch: string, head: string, stagedPatch: string, unstagedPatch: string, files: UntrackedFile[]): string {
+  const hash = createHash("sha256");
+  hash.update(branch);
+  hash.update("\0");
+  hash.update(head);
+  hash.update("\0staged\0");
+  hash.update(stagedPatch);
+  hash.update("\0unstaged\0");
+  hash.update(unstagedPatch);
+  for (const file of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
+    hash.update("\0file\0");
+    hash.update(file.path);
+    hash.update("\0");
+    hash.update(String(file.mode));
+    hash.update("\0");
+    hash.update(file.data);
+  }
+  return hash.digest("hex");
+}
+
+export function getWorkingStateFingerprint(root: string): string {
+  const snapshot = getGitSnapshot(root);
+  if (snapshot.head === "UNBORN") throw new Error("Create the first Git commit before enabling autosync.");
+  if (snapshot.branch === "DETACHED") throw new Error("Autosync requires a named Git branch.");
+  const stagedPatch = git(root, ["diff", "--binary", "--cached", "HEAD"]);
+  const unstagedPatch = git(root, ["diff", "--binary"]);
+  const untracked = listUntracked(root);
+  return stateFingerprint(snapshot.branch, snapshot.head, stagedPatch, unstagedPatch, untracked.files);
+}
+
 function captureMemory(root: string): Record<string, string> {
   const memory: Record<string, string> = {};
   for (const relativePath of SYNC_FILES) {
@@ -317,16 +349,20 @@ export function createCheckpoint(root: string, task = ""): CheckpointResult {
   if (snapshot.head === "UNBORN") throw new Error("Create the first Git commit before making a cross-device checkpoint.");
   if (snapshot.branch === "DETACHED") throw new Error("Cross-device checkpoint requires a named Git branch.");
   const untracked = listUntracked(root);
+  const stagedPatch = git(root, ["diff", "--binary", "--cached", "HEAD"]);
+  const unstagedPatch = git(root, ["diff", "--binary"]);
+  const fingerprint = stateFingerprint(snapshot.branch, snapshot.head, stagedPatch, unstagedPatch, untracked.files);
   const payload: ContinuityPayload = {
     version: SYNC_SCHEMA,
     projectId: repository.projectId,
     createdAt: new Date().toISOString(),
+    fingerprint,
     task: task.trim(),
     repository: repository.normalized,
     branch: snapshot.branch,
     head: snapshot.head,
-    stagedPatch: git(root, ["diff", "--binary", "--cached", "HEAD"]),
-    unstagedPatch: git(root, ["diff", "--binary"]),
+    stagedPatch,
+    unstagedPatch,
     untracked: untracked.files,
     skippedUntracked: untracked.skipped,
     bundle: createBundle(root, snapshot.branch),
@@ -336,7 +372,7 @@ export function createCheckpoint(root: string, task = ""): CheckpointResult {
   const vault = refreshVault(config);
   const commit = pushCheckpoint(vault, config, repository.projectId, encrypt(payload, key), payload.createdAt);
   appendEvent(root, "sync.checkpoint", { task: payload.task, head: payload.head, branch: payload.branch, vaultCommit: commit, skippedUntracked: untracked.skipped.length });
-  return { projectId: repository.projectId, task: payload.task, branch: payload.branch, head: payload.head, untracked: payload.untracked.length, skippedUntracked: payload.skippedUntracked, vaultCommit: commit };
+  return { projectId: repository.projectId, fingerprint, task: payload.task, branch: payload.branch, head: payload.head, untracked: payload.untracked.length, skippedUntracked: payload.skippedUntracked, vaultCommit: commit };
 }
 
 function loadCheckpoint(root: string): ContinuityPayload {
@@ -438,10 +474,11 @@ export function resumeCheckpoint(root: string, force = false): ResumeResult {
   return { projectId: payload.projectId, task: payload.task, branch: payload.branch, head: payload.head, createdAt: payload.createdAt, untracked: payload.untracked.length, skippedUntracked: payload.skippedUntracked, ...(rescueStash ? { rescueStash } : {}) };
 }
 
-export function getSyncStatus(root: string): Omit<ResumeResult, "untracked"> & { untracked: number; ageMs: number } {
+export function getSyncStatus(root: string): Omit<ResumeResult, "untracked"> & { untracked: number; ageMs: number; fingerprint?: string } {
   const payload = loadCheckpoint(root);
   return {
     projectId: payload.projectId,
+    fingerprint: payload.fingerprint,
     task: payload.task,
     branch: payload.branch,
     head: payload.head,
