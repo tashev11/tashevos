@@ -81,30 +81,25 @@ Compatible clients get `tashevos_context`, `tashevos_status`, `tashevos_handoff`
 
 ## Reddit ↔ GitHub automation
 
-TashevOS includes an optional background bridge for open-source project growth and feedback loops:
+TashevOS supports a Reddit Developer Platform app that can automate feedback loops for multiple GitHub repositories from one installation:
 
 ```text
-GitHub Release
-      ↓
-allowlisted Reddit communities
-      ↓
+GitHub Releases (N repos)
+        ↓
+Devvit scheduler
+        ↓
+Reddit app-account posts
+        ↓
 bug / feature feedback
-      ↓
-GitHub Issues
-      ↓
+        ↓
+Issue in the originating GitHub repo
+        ↓
 closed Issue → one reply to the originating Reddit comment
 ```
 
-The bridge checks subreddit rules before a release post, deduplicates releases, discloses that posts are automated, never votes or sends DMs, and stores OAuth credentials only in the local TashevOS home.
+The preferred implementation lives in [integrations/reddit-devvit](integrations/reddit-devvit). It checks subreddit rules, deduplicates releases per repository, uses the Reddit app account rather than a personal identity, never votes or sends DMs, and stores GitHub credentials only as a Devvit secret.
 
-```bash
-tash reddit init --repo OWNER/REPO --bot BOT_USERNAME --subreddit opensource SideProject
-tash reddit auth
-tash reddit tick
-tash reddit install
-```
-
-The one-time Reddit app/API approval and credentials must exist before activation. See [docs/REDDIT_BRIDGE.md](docs/REDDIT_BRIDGE.md).
+The original local OAuth transport remains available through `tash reddit init/auth/tick/install` for approved Reddit Data API use cases. See [docs/REDDIT_BRIDGE.md](docs/REDDIT_BRIDGE.md).
 
 ## Cross-device continuity
 

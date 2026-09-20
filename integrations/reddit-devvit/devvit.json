@@ -1,0 +1,79 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "tashev-os",
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.cjs"
+  },
+  "permissions": {
+    "http": {
+      "enable": true,
+      "domains": ["api.github.com"]
+    },
+    "redis": true,
+    "reddit": {
+      "enable": true
+    }
+  },
+  "settings": {
+    "global": {
+      "githubRepos": {
+        "type": "string",
+        "label": "GitHub repositories (one per line)",
+        "defaultValue": "tashev11/tashevos\ntashev11/tashev-relay\ntashev11/tashev-proof\ntashev11/tashev-crew"
+      },
+      "githubToken": {
+        "type": "string",
+        "label": "GitHub fine-grained token",
+        "isSecret": true
+      },
+      "autoPublish": {
+        "type": "boolean",
+        "label": "Automatically publish GitHub releases",
+        "defaultValue": true
+      }
+    },
+    "subreddit": {
+      "subredditEnabled": {
+        "type": "boolean",
+        "label": "Enable TashevOS release and feedback bridge",
+        "defaultValue": true
+      }
+    }
+  },
+  "triggers": {
+    "onAppInstall": "/internal/triggers/on-app-install",
+    "onAppUpgrade": "/internal/triggers/on-app-upgrade",
+    "onCommentCreate": "/internal/triggers/on-comment-create"
+  },
+  "scheduler": {
+    "tasks": {
+      "sync-github": {
+        "endpoint": "/internal/scheduler/sync-github",
+        "cron": "*/15 * * * *"
+      }
+    }
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "Sync TashevOS with GitHub now",
+        "description": "Run the multi-repository Reddit ↔ GitHub bridge immediately",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/sync-now"
+      }
+    ]
+  },
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build"
+  },
+  "sourceIgnores": [
+    "src/client/",
+    "public/"
+  ],
+  "dev": {
+    "subreddit": "tashev_os_dev"
+  }
+}
