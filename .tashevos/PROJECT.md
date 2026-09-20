@@ -12,8 +12,9 @@ TashevOS is a local-first control plane for AI coding agents: one project memory
 - src/core/: agents (detection), instructions (managed blocks), store (events and state), context (packets), doctor, scanner, sync/autosync and the optional Reddit ↔ GitHub bridge.
 - src/lib/: fs and git helpers.
 - packages/sdk/: adapter SDK types under Apache-2.0. The core is AGPL-3.0-only.
-- docs/: principles, memory model, compatibility, auto-healing and Reddit bridge design.
+- docs/: principles, memory model, compatibility, auto-healing, Reddit bridge and Publisher Hub design.
 - integrations/reddit-devvit/: server-only Reddit Developer Platform app for multi-repository GitHub release/feedback automation.
+- integrations/publisher/: multi-repository release distribution hub with direct API adapters, dedupe state and safe outbox drafts.
 
 ## Commands
 - `npm run check`: typecheck, build and tests. Run it before every push.

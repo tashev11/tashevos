@@ -101,6 +101,12 @@ The preferred implementation lives in [integrations/reddit-devvit](integrations/
 
 The original local OAuth transport remains available through `tash reddit init/auth/tick/install` for approved Reddit Data API use cases. See [docs/REDDIT_BRIDGE.md](docs/REDDIT_BRIDGE.md).
 
+## Publisher Hub
+
+TashevOS can also distribute GitHub releases across developer-facing channels from one deduplicated pipeline. Direct API adapters cover DEV.to, Hashnode, LinkedIn, Telegram, Discord, Bluesky and Mastodon; Reddit stays on the existing Devvit bridge. Platforms where blind API posting is unavailable or inappropriate automatically receive ready-to-publish drafts instead of brittle browser automation.
+
+The configuration lives in `.tashevos/publisher.json`, state is tracked in `.tashevos/publisher-state.json`, and the scheduled workflow is `.github/workflows/publisher.yml`. See [docs/PUBLISHER_HUB.md](docs/PUBLISHER_HUB.md) and [integrations/publisher](integrations/publisher).
+
 ## Cross-device continuity
 
 TashevOS can keep an **encrypted work checkpoint** in a private Git remote so another trusted device can continue from the same Git commit **including staged changes, unstaged changes and safe untracked files**. Secret-like files such as `.env*`, private keys and credential files are excluded before encryption. Raw AI sessions remain local-only.

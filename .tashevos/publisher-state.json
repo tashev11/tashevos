@@ -1,0 +1,323 @@
+{
+  "version": 1,
+  "releases": {
+    "tashev11/tashevos#392375816": {
+      "repo": "tashev11/tashevos",
+      "releaseId": "392375816",
+      "tag": "v0.1.0-alpha.1",
+      "sourceUrl": "https://github.com/tashev11/tashevos/releases/tag/v0.1.0-alpha.1",
+      "publishedAt": "2026-09-20T09:16:37Z",
+      "platforms": {
+        "reddit": {
+          "status": "delegated",
+          "platform": "reddit",
+          "note": "Handled by integrations/reddit-devvit."
+        },
+        "devto": {
+          "status": "blocked",
+          "platform": "devto",
+          "reason": "Missing configuration: DEVTO_API_KEY"
+        },
+        "hashnode": {
+          "status": "blocked",
+          "platform": "hashnode",
+          "reason": "Missing configuration: HASHNODE_PAT, HASHNODE_PUBLICATION_ID"
+        },
+        "linkedin": {
+          "status": "blocked",
+          "platform": "linkedin",
+          "reason": "Missing configuration: LINKEDIN_ACCESS_TOKEN, LINKEDIN_AUTHOR_URN, LINKEDIN_VERSION"
+        },
+        "telegram": {
+          "status": "blocked",
+          "platform": "telegram",
+          "reason": "Missing configuration: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID"
+        },
+        "discord": {
+          "status": "blocked",
+          "platform": "discord",
+          "reason": "Missing configuration: DISCORD_WEBHOOK_URL"
+        },
+        "bluesky": {
+          "status": "blocked",
+          "platform": "bluesky",
+          "reason": "Missing configuration: BLUESKY_HANDLE, BLUESKY_APP_PASSWORD"
+        },
+        "mastodon": {
+          "status": "blocked",
+          "platform": "mastodon",
+          "reason": "Missing configuration: MASTODON_BASE_URL, MASTODON_ACCESS_TOKEN"
+        },
+        "x": {
+          "status": "disabled",
+          "platform": "x"
+        },
+        "wordpress": {
+          "status": "disabled",
+          "platform": "wordpress"
+        },
+        "webhook": {
+          "status": "disabled",
+          "platform": "webhook"
+        },
+        "hackernews": {
+          "status": "outbox",
+          "platform": "hackernews",
+          "path": ".tashevos/publisher-outbox/tashev11__tashevos/v0.1.0-alpha.1--hackernews.md"
+        },
+        "producthunt": {
+          "status": "outbox",
+          "platform": "producthunt",
+          "path": ".tashevos/publisher-outbox/tashev11__tashevos/v0.1.0-alpha.1--producthunt.md"
+        },
+        "peerlist": {
+          "status": "outbox",
+          "platform": "peerlist",
+          "path": ".tashevos/publisher-outbox/tashev11__tashevos/v0.1.0-alpha.1--peerlist.md"
+        },
+        "indiehackers": {
+          "status": "outbox",
+          "platform": "indiehackers",
+          "path": ".tashevos/publisher-outbox/tashev11__tashevos/v0.1.0-alpha.1--indiehackers.md"
+        },
+        "hackernoon": {
+          "status": "outbox",
+          "platform": "hackernoon",
+          "path": ".tashevos/publisher-outbox/tashev11__tashevos/v0.1.0-alpha.1--hackernoon.md"
+        },
+        "dzone": {
+          "status": "outbox",
+          "platform": "dzone",
+          "path": ".tashevos/publisher-outbox/tashev11__tashevos/v0.1.0-alpha.1--dzone.md"
+        },
+        "dailydev": {
+          "status": "outbox",
+          "platform": "dailydev",
+          "path": ".tashevos/publisher-outbox/tashev11__tashevos/v0.1.0-alpha.1--dailydev.md"
+        },
+        "medium": {
+          "status": "outbox",
+          "platform": "medium",
+          "path": ".tashevos/publisher-outbox/tashev11__tashevos/v0.1.0-alpha.1--medium.md"
+        },
+        "lobsters": {
+          "status": "outbox",
+          "platform": "lobsters",
+          "path": ".tashevos/publisher-outbox/tashev11__tashevos/v0.1.0-alpha.1--lobsters.md"
+        }
+      }
+    },
+    "tashev11/tashev-relay#392417421": {
+      "repo": "tashev11/tashev-relay",
+      "releaseId": "392417421",
+      "tag": "v0.1.1",
+      "sourceUrl": "https://github.com/tashev11/tashev-relay/releases/tag/v0.1.1",
+      "publishedAt": "2026-09-20T12:00:13Z",
+      "platforms": {
+        "reddit": {
+          "status": "delegated",
+          "platform": "reddit",
+          "note": "Handled by integrations/reddit-devvit."
+        },
+        "devto": {
+          "status": "blocked",
+          "platform": "devto",
+          "reason": "Missing configuration: DEVTO_API_KEY"
+        },
+        "hashnode": {
+          "status": "blocked",
+          "platform": "hashnode",
+          "reason": "Missing configuration: HASHNODE_PAT, HASHNODE_PUBLICATION_ID"
+        },
+        "linkedin": {
+          "status": "blocked",
+          "platform": "linkedin",
+          "reason": "Missing configuration: LINKEDIN_ACCESS_TOKEN, LINKEDIN_AUTHOR_URN, LINKEDIN_VERSION"
+        },
+        "telegram": {
+          "status": "blocked",
+          "platform": "telegram",
+          "reason": "Missing configuration: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID"
+        },
+        "discord": {
+          "status": "blocked",
+          "platform": "discord",
+          "reason": "Missing configuration: DISCORD_WEBHOOK_URL"
+        },
+        "bluesky": {
+          "status": "blocked",
+          "platform": "bluesky",
+          "reason": "Missing configuration: BLUESKY_HANDLE, BLUESKY_APP_PASSWORD"
+        },
+        "mastodon": {
+          "status": "blocked",
+          "platform": "mastodon",
+          "reason": "Missing configuration: MASTODON_BASE_URL, MASTODON_ACCESS_TOKEN"
+        },
+        "x": {
+          "status": "disabled",
+          "platform": "x"
+        },
+        "wordpress": {
+          "status": "disabled",
+          "platform": "wordpress"
+        },
+        "webhook": {
+          "status": "disabled",
+          "platform": "webhook"
+        },
+        "hackernews": {
+          "status": "outbox",
+          "platform": "hackernews",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-relay/v0.1.1--hackernews.md"
+        },
+        "producthunt": {
+          "status": "outbox",
+          "platform": "producthunt",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-relay/v0.1.1--producthunt.md"
+        },
+        "peerlist": {
+          "status": "outbox",
+          "platform": "peerlist",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-relay/v0.1.1--peerlist.md"
+        },
+        "indiehackers": {
+          "status": "outbox",
+          "platform": "indiehackers",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-relay/v0.1.1--indiehackers.md"
+        },
+        "hackernoon": {
+          "status": "outbox",
+          "platform": "hackernoon",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-relay/v0.1.1--hackernoon.md"
+        },
+        "dzone": {
+          "status": "outbox",
+          "platform": "dzone",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-relay/v0.1.1--dzone.md"
+        },
+        "dailydev": {
+          "status": "outbox",
+          "platform": "dailydev",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-relay/v0.1.1--dailydev.md"
+        },
+        "medium": {
+          "status": "outbox",
+          "platform": "medium",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-relay/v0.1.1--medium.md"
+        },
+        "lobsters": {
+          "status": "outbox",
+          "platform": "lobsters",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-relay/v0.1.1--lobsters.md"
+        }
+      }
+    },
+    "tashev11/tashev-proof#392438292": {
+      "repo": "tashev11/tashev-proof",
+      "releaseId": "392438292",
+      "tag": "v0.1.0",
+      "sourceUrl": "https://github.com/tashev11/tashev-proof/releases/tag/v0.1.0",
+      "publishedAt": "2026-09-20T13:20:27Z",
+      "platforms": {
+        "reddit": {
+          "status": "delegated",
+          "platform": "reddit",
+          "note": "Handled by integrations/reddit-devvit."
+        },
+        "devto": {
+          "status": "blocked",
+          "platform": "devto",
+          "reason": "Missing configuration: DEVTO_API_KEY"
+        },
+        "hashnode": {
+          "status": "blocked",
+          "platform": "hashnode",
+          "reason": "Missing configuration: HASHNODE_PAT, HASHNODE_PUBLICATION_ID"
+        },
+        "linkedin": {
+          "status": "blocked",
+          "platform": "linkedin",
+          "reason": "Missing configuration: LINKEDIN_ACCESS_TOKEN, LINKEDIN_AUTHOR_URN, LINKEDIN_VERSION"
+        },
+        "telegram": {
+          "status": "blocked",
+          "platform": "telegram",
+          "reason": "Missing configuration: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID"
+        },
+        "discord": {
+          "status": "blocked",
+          "platform": "discord",
+          "reason": "Missing configuration: DISCORD_WEBHOOK_URL"
+        },
+        "bluesky": {
+          "status": "blocked",
+          "platform": "bluesky",
+          "reason": "Missing configuration: BLUESKY_HANDLE, BLUESKY_APP_PASSWORD"
+        },
+        "mastodon": {
+          "status": "blocked",
+          "platform": "mastodon",
+          "reason": "Missing configuration: MASTODON_BASE_URL, MASTODON_ACCESS_TOKEN"
+        },
+        "x": {
+          "status": "disabled",
+          "platform": "x"
+        },
+        "wordpress": {
+          "status": "disabled",
+          "platform": "wordpress"
+        },
+        "webhook": {
+          "status": "disabled",
+          "platform": "webhook"
+        },
+        "hackernews": {
+          "status": "outbox",
+          "platform": "hackernews",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-proof/v0.1.0--hackernews.md"
+        },
+        "producthunt": {
+          "status": "outbox",
+          "platform": "producthunt",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-proof/v0.1.0--producthunt.md"
+        },
+        "peerlist": {
+          "status": "outbox",
+          "platform": "peerlist",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-proof/v0.1.0--peerlist.md"
+        },
+        "indiehackers": {
+          "status": "outbox",
+          "platform": "indiehackers",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-proof/v0.1.0--indiehackers.md"
+        },
+        "hackernoon": {
+          "status": "outbox",
+          "platform": "hackernoon",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-proof/v0.1.0--hackernoon.md"
+        },
+        "dzone": {
+          "status": "outbox",
+          "platform": "dzone",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-proof/v0.1.0--dzone.md"
+        },
+        "dailydev": {
+          "status": "outbox",
+          "platform": "dailydev",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-proof/v0.1.0--dailydev.md"
+        },
+        "medium": {
+          "status": "outbox",
+          "platform": "medium",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-proof/v0.1.0--medium.md"
+        },
+        "lobsters": {
+          "status": "outbox",
+          "platform": "lobsters",
+          "path": ".tashevos/publisher-outbox/tashev11__tashev-proof/v0.1.0--lobsters.md"
+        }
+      }
+    }
+  }
+}
