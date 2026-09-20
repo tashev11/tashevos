@@ -9,6 +9,7 @@ import { appendEvent, initializeStore, readRecentEvents, updateState } from "./c
 import { installInstructionAdapters } from "./core/instructions.js";
 import { runDoctor } from "./core/doctor.js";
 import { compileContext } from "./core/context.js";
+import { createCheckpoint, getSyncKey, getSyncStatus, initializeSync, resumeCheckpoint } from "./core/sync.js";
 
 const VERSION = "0.1.0-alpha.1";
 const program = new Command();
@@ -125,6 +126,99 @@ program.command("heal")
       const icon = check.health === "ok" ? pc.green("✓") : check.health === "warn" ? pc.yellow("!") : pc.red("✗");
       console.log(icon + " " + check.label + ": " + check.detail);
     }
+  });
+
+
+program.command("checkpoint")
+  .argument("[task...]", "what you are doing / where to continue")
+  .option("-p, --path <path>", "project path", process.cwd())
+  .description("Create an encrypted cross-device checkpoint of Git + safe project continuity")
+  .action((task: string[], options: { path: string }) => {
+    const root = findProjectRoot(options.path);
+    const result = createCheckpoint(root, task.join(" "));
+    console.log(pc.bold("TashevOS checkpoint saved"));
+    console.log("Project: " + root);
+    console.log("Git: " + result.branch + " @ " + result.head.slice(0, 12));
+    console.log("Task: " + (result.task || "(not specified)"));
+    console.log("Untracked captured: " + result.untracked);
+    if (result.skippedUntracked.length) {
+      console.log(pc.yellow("Skipped for safety: " + result.skippedUntracked.length));
+      for (const item of result.skippedUntracked.slice(0, 10)) console.log(pc.dim("  - " + item));
+    }
+    console.log(pc.dim("Vault commit: " + result.vaultCommit.slice(0, 12)));
+  });
+
+program.command("resume")
+  .argument("[path]", "project path", process.cwd())
+  .option("--force", "allow replacing local branch/worktree after creating a rescue stash", false)
+  .description("Restore the latest encrypted checkpoint on this device")
+  .action((path: string, options: { force: boolean }) => {
+    const root = findProjectRoot(path);
+    const result = resumeCheckpoint(root, options.force);
+    console.log(pc.bold("TashevOS resumed"));
+    console.log("Project: " + root);
+    console.log("Checkpoint: " + result.createdAt);
+    console.log("Git: " + result.branch + " @ " + result.head.slice(0, 12));
+    console.log("Task: " + (result.task || "(not specified)"));
+    if (result.rescueStash) console.log(pc.yellow("Previous local work saved in " + result.rescueStash));
+    if (result.skippedUntracked.length) console.log(pc.yellow("Checkpoint excluded " + result.skippedUntracked.length + " secret/large untracked file(s)."));
+    console.log(pc.dim("Next: tash context \"" + (result.task || "continue") + "\""));
+  });
+
+const sync = program.command("sync").description("Configure and inspect encrypted cross-device continuity");
+
+sync.command("init")
+  .requiredOption("--remote <git-url>", "private Git repository used as the encrypted continuity vault")
+  .option("--key <key>", "existing recovery key for another device")
+  .description("Configure encrypted sync on this device")
+  .action((options: { remote: string; key?: string }) => {
+    const result = initializeSync(options.remote, options.key);
+    console.log(pc.bold("TashevOS sync configured"));
+    console.log("Remote: " + result.config.remote);
+    console.log("Encryption: AES-256-GCM + scrypt");
+    console.log("Recovery key: " + (result.generatedKey ? "generated locally" : "reused"));
+    console.log(pc.dim("Use `tash sync key` only when you need to enroll another trusted device."));
+  });
+
+sync.command("status")
+  .argument("[path]", "project path", process.cwd())
+  .description("Show the latest remote checkpoint for this project")
+  .action((path: string) => {
+    const root = findProjectRoot(path);
+    const status = getSyncStatus(root);
+    console.log(pc.bold("TashevOS sync status"));
+    console.log("Checkpoint: " + status.createdAt);
+    console.log("Git: " + status.branch + " @ " + status.head.slice(0, 12));
+    console.log("Task: " + (status.task || "(not specified)"));
+    console.log("Age: " + Math.round(status.ageMs / 1000) + "s");
+    console.log("Untracked captured: " + status.untracked);
+    if (status.skippedUntracked.length) console.log(pc.yellow("Excluded for safety: " + status.skippedUntracked.length));
+  });
+
+sync.command("key")
+  .description("Print the recovery key so you can enroll another trusted device")
+  .action(() => {
+    console.log(getSyncKey());
+  });
+
+sync.command("push")
+  .argument("[task...]", "what you are doing / where to continue")
+  .option("-p, --path <path>", "project path", process.cwd())
+  .description("Alias for checkpoint")
+  .action((task: string[], options: { path: string }) => {
+    const root = findProjectRoot(options.path);
+    const result = createCheckpoint(root, task.join(" "));
+    console.log("Checkpoint: " + result.branch + " @ " + result.head.slice(0, 12));
+  });
+
+sync.command("pull")
+  .argument("[path]", "project path", process.cwd())
+  .option("--force", "create rescue stash and restore even if local work differs", false)
+  .description("Alias for resume")
+  .action((path: string, options: { force: boolean }) => {
+    const root = findProjectRoot(path);
+    const result = resumeCheckpoint(root, options.force);
+    console.log("Resumed: " + result.branch + " @ " + result.head.slice(0, 12));
   });
 
 program.parseAsync(process.argv);

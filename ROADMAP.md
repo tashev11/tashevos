@@ -13,6 +13,7 @@ The roadmap is capability-driven, not tied to a single AI vendor.
 - [ ] Publish npm alpha package
 
 ## v0.2 — Universal session harvester
+- [x] Encrypted cross-device checkpoint/resume (Git vault transport)
 - [ ] Claude Code history importer
 - [ ] Codex history importer
 - [ ] Gemini CLI history importer

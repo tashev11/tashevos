@@ -18,3 +18,11 @@ Use GitHub's private vulnerability reporting for this repository when available.
 - Destructive/critical operations require explicit policy authorization.
 
 Supported security updates will initially target the latest alpha/minor line while the API is unstable.
+## Cross-device sync
+
+- Sync is opt-in and uses a user-selected Git remote.
+- Checkpoint payloads are compressed then encrypted client-side with AES-256-GCM; keys are derived with scrypt.
+- The recovery key is stored locally (`~/.tashevos/sync.key`, mode 0600 where supported) and is never committed to the vault.
+- `.env*`, common credential files and private-key formats are excluded from untracked-file capture before encryption.
+- Raw session directories (`.tashevos/sessions`) are never included in checkpoints.
+- `resume` refuses to overwrite a dirty worktree by default; `--force` first creates a Git rescue stash.
