@@ -1,8 +1,9 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import type { AgentDetection } from "../types.js";
+import { stripManagedBlock } from "./instructions.js";
 
 type AgentDef = {
   id: string;
@@ -11,6 +12,11 @@ type AgentDef = {
   homeMarkers?: string[];
   projectMarkers?: string[];
   history?: string[];
+};
+
+export type DetectOptions = {
+  home?: string;
+  commandExists?: (command: string) => boolean;
 };
 
 const defs: AgentDef[] = [
@@ -31,7 +37,7 @@ const defs: AgentDef[] = [
 ];
 
 function commandExists(command: string): boolean {
-  const result = spawnSync("sh", ["-lc", "command -v " + command], { stdio: "ignore" });
+  const result = spawnSync("sh", ["-lc", 'command -v "$1"', "sh", command], { stdio: "ignore" });
   return result.status === 0;
 }
 
@@ -40,18 +46,33 @@ function artifactCount(path: string): number {
   catch { return 0; }
 }
 
-export function detectAgents(root: string): AgentDetection[] {
-  const home = homedir();
+// A marker file holding nothing but the TashevOS managed block was written by
+// TashevOS itself, so it must not count as evidence that the agent is in use.
+function isForeignMarker(path: string): boolean {
+  if (!existsSync(path)) return false;
+  try {
+    if (!statSync(path).isFile()) return true;
+    const text = readFileSync(path, "utf8");
+    const rest = stripManagedBlock(text);
+    return rest === text || rest.trim().length > 0;
+  } catch {
+    return true;
+  }
+}
+
+export function detectAgents(root: string, options: DetectOptions = {}): AgentDetection[] {
+  const home = options.home ?? homedir();
+  const hasCommand = options.commandExists ?? commandExists;
   return defs.map((def) => {
     const evidence: string[] = [];
     for (const command of def.commands ?? []) {
-      if (commandExists(command)) evidence.push("command:" + command);
+      if (hasCommand(command)) evidence.push("command:" + command);
     }
     for (const marker of def.homeMarkers ?? []) {
       if (existsSync(join(home, marker))) evidence.push("home:" + marker);
     }
     for (const marker of def.projectMarkers ?? []) {
-      if (existsSync(join(root, marker))) evidence.push("project:" + marker);
+      if (isForeignMarker(join(root, marker))) evidence.push("project:" + marker);
     }
     const historySources = (def.history ?? [])
       .map((path) => join(home, path))

@@ -19,6 +19,13 @@ const block = [
   END
 ].join("\n");
 
+export function stripManagedBlock(text: string): string {
+  const start = text.indexOf(START);
+  const end = text.indexOf(END);
+  if (start < 0 || end < start) return text;
+  return text.slice(0, start) + text.slice(end + END.length);
+}
+
 function upsertManagedBlock(path: string): void {
   let current = existsSync(path) ? readFileSync(path, "utf8") : "";
   const start = current.indexOf(START);
