@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+<title id="title">TashevOS</title><desc id="desc">One project. Every AI. Zero lost context.</desc>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b1020"/><stop offset=".55" stop-color="#141b34"/><stop offset="1" stop-color="#0e7490"/></linearGradient><filter id="glow"><feGaussianBlur stdDeviation="14"/></filter></defs>
+<rect width="1200" height="360" rx="28" fill="url(#bg)"/>
+<circle cx="980" cy="92" r="54" fill="#22d3ee" opacity=".18" filter="url(#glow)"/><circle cx="1070" cy="240" r="72" fill="#a78bfa" opacity=".14" filter="url(#glow)"/>
+<g stroke="#67e8f9" stroke-width="2" opacity=".55"><path d="M920 85L1035 125L970 212L1090 255"/><path d="M920 85L860 185L970 212"/><path d="M1035 125L1090 255"/></g>
+<g fill="#e0f2fe"><circle cx="920" cy="85" r="9"/><circle cx="1035" cy="125" r="9"/><circle cx="860" cy="185" r="9"/><circle cx="970" cy="212" r="11"/><circle cx="1090" cy="255" r="9"/></g>
+<g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif" fill="white">
+<text x="72" y="116" font-size="70" font-weight="800" letter-spacing="-2">TashevOS</text>
+<text x="74" y="166" font-size="28" fill="#a5f3fc" font-weight="600">One project. Every AI. Zero lost context.</text>
+<text x="74" y="218" font-size="21" fill="#cbd5e1">Open control plane for AI coding</text>
+<text x="74" y="256" font-size="18" fill="#94a3b8">Shared memory · Context optimization · Agent handoffs · Auto-healing</text>
+</g>
+<g transform="translate(74 290)" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="15" font-weight="700">
+<rect width="118" height="32" rx="16" fill="#164e63"/><text x="59" y="21" text-anchor="middle" fill="#cffafe">LOCAL-FIRST</text>
+<rect x="132" width="130" height="32" rx="16" fill="#312e81"/><text x="197" y="21" text-anchor="middle" fill="#e0e7ff">OPEN CORE</text>
+<rect x="276" width="140" height="32" rx="16" fill="#14532d"/><text x="346" y="21" text-anchor="middle" fill="#dcfce7">MULTI-AGENT</text>
+</g></svg>

@@ -7,7 +7,7 @@
     "tash": "dist/cli.js",
     "tashevos": "dist/cli.js"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": ["dist", "README.md", "LICENSE", "docs/assets"],
   "scripts": {
     "dev": "npm run build && node dist/cli.js",
     "build": "tsc -p tsconfig.json",

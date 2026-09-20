@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="TashevOS mark">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0f172a"/><stop offset="1" stop-color="#0e7490"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="url(#g)"/>
+<g fill="none" stroke="#67e8f9" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M122 138H390M256 138V374M156 258H356M156 258L122 374M356 258L390 374"/></g>
+<g fill="#e0f2fe"><circle cx="122" cy="138" r="21"/><circle cx="390" cy="138" r="21"/><circle cx="256" cy="138" r="24"/><circle cx="156" cy="258" r="21"/><circle cx="356" cy="258" r="21"/><circle cx="122" cy="374" r="21"/><circle cx="256" cy="374" r="24"/><circle cx="390" cy="374" r="21"/></g></svg>
