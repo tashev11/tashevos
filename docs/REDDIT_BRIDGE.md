@@ -1,8 +1,30 @@
 # Reddit ↔ GitHub bridge
 
-TashevOS can run a local background bridge that turns GitHub releases into Reddit posts and mirrors actionable Reddit feedback back into GitHub Issues.
+TashevOS supports two transports for the same Reddit ↔ GitHub workflow.
 
-## Safety model
+The preferred transport is the Reddit Developer Platform app in `integrations/reddit-devvit/`. It runs on Reddit infrastructure, uses the app account, supports multiple GitHub repositories in one installation, schedules synchronization every 15 minutes, and routes Reddit feedback back to the repository that produced the release post.
+
+The current default Devvit repository set is `tashev11/tashevos`, `tashev11/tashev-relay`, `tashev11/tashev-proof`, and `tashev11/tashev-crew`. Configure another set with the Devvit `githubRepos` setting.
+
+The original local OAuth bridge remains available through the `tash reddit ...` CLI for approved Reddit Data API use cases.
+
+## Devvit quick start
+
+```bash
+cd integrations/reddit-devvit
+export PATH="/opt/homebrew/opt/node@24/bin:$PATH"
+npm install
+npm run test:types
+npm run lint
+npm run build
+npm run dev
+```
+
+Store the GitHub fine-grained token only as the Devvit secret `githubToken`. For Reddit feedback → GitHub Issues, the token needs Issues read/write access to every target repository. Never commit the token.
+
+The live playtest app is `tashev-os` in `r/tashev_os_dev`. A four-repository scheduler pass was verified on 2026-09-20.
+
+## Local OAuth bridge safety model
 
 The bridge is intentionally allowlist-only. It posts only to subreddits named in its config, checks the current subreddit rules before a new automated release post, deduplicates release/subreddit pairs, identifies itself as automated, and never votes or sends DMs.
 

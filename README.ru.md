@@ -72,30 +72,25 @@ MCP-клиенты получают `tashevos_context`, `tashevos_status`, `tash
 
 ## Автоматизация Reddit ↔ GitHub
 
-TashevOS может в фоне связывать релизы GitHub с Reddit и возвращать полезную обратную связь обратно в разработку:
+TashevOS умеет через Reddit Developer Platform автоматически вести feedback-loop сразу для нескольких GitHub-репозиториев из одного приложения:
 
 ```text
-GitHub Release
-      ↓
-разрешённые сабреддиты
-      ↓
+GitHub Releases (несколько repo)
+        ↓
+Devvit scheduler
+        ↓
+посты от Reddit app account
+        ↓
 bug / feature feedback
-      ↓
-GitHub Issues
-      ↓
+        ↓
+Issue в исходном GitHub-репозитории
+        ↓
 Issue закрыт → один ответ в исходный Reddit-комментарий
 ```
 
-Мост работает только по allowlist сабреддитов, перед новой публикацией проверяет их правила, не дублирует один релиз, явно сообщает об автоматической публикации, не голосует и не отправляет личные сообщения. OAuth-данные хранятся только локально.
+Основная реализация находится в [integrations/reddit-devvit](integrations/reddit-devvit). Она проверяет правила сообщества, не дублирует релизы по репозиториям, действует от app account, не голосует и не отправляет личные сообщения, а GitHub token хранит только как Devvit secret.
 
-```bash
-tash reddit init --repo OWNER/REPO --bot BOT_USERNAME --subreddit opensource SideProject
-tash reddit auth
-tash reddit tick
-tash reddit install
-```
-
-До включения нужен один внешний шаг: одобренное Reddit-приложение/API-доступ и OAuth-данные отдельного app/bot аккаунта. После этого сервис может работать без ручных публикаций. Подробнее: [docs/REDDIT_BRIDGE.md](docs/REDDIT_BRIDGE.md).
+Старый локальный OAuth-вариант через `tash reddit init/auth/tick/install` остаётся fallback для одобренных сценариев Reddit Data API. Подробнее: [docs/REDDIT_BRIDGE.md](docs/REDDIT_BRIDGE.md).
 
 ## Непрерывность между устройствами
 
