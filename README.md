@@ -65,6 +65,25 @@ tash doctor /path/to/your/project
 tash context "fix admin notifications" --path /path/to/your/project
 ```
 
+## Cross-device continuity
+
+TashevOS can keep an **encrypted work checkpoint** in a private Git remote so another trusted device can continue from the same Git commit **including staged changes, unstaged changes and safe untracked files**. Secret-like files such as `.env*`, private keys and credential files are excluded before encryption. Raw AI sessions remain local-only.
+
+```bash
+# once per device
+tash sync init --remote git@github.com:YOU/tashevos-state.git
+
+# before stopping or switching devices
+tash checkpoint "finish the billing refactor"
+
+# on another clone/device
+tash sync init --remote git@github.com:YOU/tashevos-state.git --key "$(...recovery key...)"
+tash sync status
+tash resume
+```
+
+The recovery key is generated locally and never written to the vault. Retrieve it only when enrolling another trusted device with `tash sync key`. The remote stores an AES-256-GCM + scrypt encrypted payload; Git history gives you previous checkpoint versions.
+
 ## What works today
 
 The current alpha already provides:
