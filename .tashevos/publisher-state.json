@@ -228,9 +228,10 @@
           "note": "Handled by integrations/reddit-devvit."
         },
         "devto": {
-          "status": "error",
+          "status": "published",
           "platform": "devto",
-          "reason": "429 Too Many Requests: {\"error\":\"Rate limit reached, try again in 300 seconds\",\"status\":429}"
+          "id": "4704548",
+          "url": "https://dev.to/tashev/tashev-proof-tashev-proof-v010-dont-trust-done-prove-it-11p7"
         },
         "hashnode": {
           "status": "blocked",
