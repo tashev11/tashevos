@@ -34,9 +34,9 @@
           "reason": "Missing configuration: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID"
         },
         "discord": {
-          "status": "blocked",
+          "status": "published",
           "platform": "discord",
-          "reason": "Missing configuration: DISCORD_WEBHOOK_URL"
+          "id": "1551454790758694963"
         },
         "bluesky": {
           "status": "blocked",
@@ -140,9 +140,9 @@
           "reason": "Missing configuration: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID"
         },
         "discord": {
-          "status": "blocked",
+          "status": "skipped",
           "platform": "discord",
-          "reason": "Missing configuration: DISCORD_WEBHOOK_URL"
+          "reason": "Discord connected after this release; backlog intentionally skipped."
         },
         "bluesky": {
           "status": "blocked",
@@ -246,9 +246,9 @@
           "reason": "Missing configuration: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID"
         },
         "discord": {
-          "status": "blocked",
+          "status": "skipped",
           "platform": "discord",
-          "reason": "Missing configuration: DISCORD_WEBHOOK_URL"
+          "reason": "Discord connected after this release; backlog intentionally skipped."
         },
         "bluesky": {
           "status": "blocked",
