@@ -140,9 +140,9 @@
           "reason": "Missing configuration: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID"
         },
         "discord": {
-          "status": "skipped",
+          "status": "published",
           "platform": "discord",
-          "reason": "Discord connected after this release; backlog intentionally skipped."
+          "id": "1551455212550754304"
         },
         "bluesky": {
           "status": "blocked",
@@ -246,9 +246,9 @@
           "reason": "Missing configuration: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID"
         },
         "discord": {
-          "status": "skipped",
+          "status": "published",
           "platform": "discord",
-          "reason": "Discord connected after this release; backlog intentionally skipped."
+          "id": "1551455216342278205"
         },
         "bluesky": {
           "status": "blocked",
