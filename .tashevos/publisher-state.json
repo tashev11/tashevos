@@ -14,9 +14,10 @@
           "note": "Handled by integrations/reddit-devvit."
         },
         "devto": {
-          "status": "blocked",
+          "status": "published",
           "platform": "devto",
-          "reason": "Missing configuration: DEVTO_API_KEY"
+          "id": "4704413",
+          "url": "https://dev.to/tashev/tashevos-tashevos-v010-alpha1-foundation-fd7"
         },
         "hashnode": {
           "status": "blocked",
@@ -120,9 +121,10 @@
           "note": "Handled by integrations/reddit-devvit."
         },
         "devto": {
-          "status": "blocked",
+          "status": "published",
           "platform": "devto",
-          "reason": "Missing configuration: DEVTO_API_KEY"
+          "id": "4704415",
+          "url": "https://dev.to/tashev/tashev-relay-tashev-relay-v011-security-and-correctness-fixes-2e4f"
         },
         "hashnode": {
           "status": "blocked",
@@ -226,9 +228,9 @@
           "note": "Handled by integrations/reddit-devvit."
         },
         "devto": {
-          "status": "blocked",
+          "status": "error",
           "platform": "devto",
-          "reason": "Missing configuration: DEVTO_API_KEY"
+          "reason": "429 Too Many Requests: {\"error\":\"Rate limit reached, try again in 300 seconds\",\"status\":429}"
         },
         "hashnode": {
           "status": "blocked",
