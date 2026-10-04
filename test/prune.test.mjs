@@ -155,8 +155,8 @@ test("planPrune rejects a keep that is not a positive integer", () => {
   const base = mkdtempSync(join(tmpdir(), "tashevos-prune-keep-"));
   try {
     const { vault } = buildVault(base, 2);
-    // keep=0 would otherwise plan to drop every commit.
-    for (const keep of [0, -1, 1.5, Number.NaN, "3"]) {
+    // keep=0 would otherwise plan to drop every commit; a huge keep would spawn two git processes per kept commit.
+    for (const keep of [0, -1, 1.5, Number.NaN, "3", 10_001, 1e21]) {
       assert.throws(() => planPrune(vault, "main", keep), /keep/, `keep=${String(keep)} must be refused`);
     }
   } finally {
@@ -811,6 +811,105 @@ test("pruneVault reports a vault that was never cloned instead of cloning it jus
       assert.throws(() => atHome(home, () => pruneVault({ apply })), /not cloned/);
     }
     assert.equal(existsSync(join(home, "vault")), false, "pruning must not clone the vault as a side effect");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// Merges a side branch (forked one commit back) into main with --no-ff and pushes: the vault never does this itself.
+function addMerge(vault) {
+  run(vault, ["checkout", "-q", "-b", "side", "HEAD~1"]);
+  writeFileSync(join(vault, "side.txt"), "side work\n", "utf8");
+  run(vault, ["add", "side.txt"]);
+  run(vault, ["commit", "-q", "-m", "side work"]);
+  run(vault, ["checkout", "-q", "main"]);
+  run(vault, ["merge", "-q", "--no-ff", "-m", "merge side", "side"]);
+  run(vault, ["branch", "-q", "-D", "side"]); // the side commit stays reachable only through the merge
+  run(vault, ["push", "-q", "origin", "main"]);
+}
+
+test("a merge commit inside the kept window is reported and refused, never silently flattened", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-merge-"));
+  try {
+    const { remote, vault } = buildVault(base, 6);
+    addMerge(vault);
+    const remoteTip = run(remote, ["rev-parse", "main"]);
+    const plan = planPrune(vault, "main", 2);
+
+    assert.equal(plan.warnings.length, 1);
+    assert.match(plan.warnings[0], /merge/);
+    assert.throws(() => applyPrune(vault, plan), /merge/);
+    assert.equal(run(remote, ["rev-parse", "main"]), remoteTip, "nothing may be rewritten");
+    assert.equal(run(vault, ["rev-parse", "HEAD"]), plan.tip);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("a merge commit that is older than the kept window does not block the prune", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-oldmerge-"));
+  try {
+    const { remote, vault } = buildVault(base, 3);
+    addMerge(vault);
+    addCheckpoints(vault, 4, 100);
+    run(vault, ["push", "-q", "origin", "main"]);
+    const plan = planPrune(vault, "main", 2);
+    assert.deepEqual(plan.warnings, []);
+
+    applyPrune(vault, plan);
+
+    assert.equal(run(remote, ["rev-list", "--count", "main"]), "2");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("applyPrune keeps a rewrite that succeeded when the remote cannot be queried afterwards, and warns", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-lsremote-"));
+  try {
+    const { remote, vault } = buildVault(base, 6);
+    run(vault, ["config", "remote.origin.pushurl", remote]); // the push still reaches the real remote ...
+    run(vault, ["remote", "set-url", "origin", join(base, "unreachable.git")]); // ... but ls-remote does not
+
+    const outcome = applyPrune(vault, planPrune(vault, "main", 2));
+
+    assert.equal(outcome.pushed, true);
+    assert.equal(run(remote, ["rev-list", "--count", "main"]), "2");
+    assert.equal(run(vault, ["rev-parse", "HEAD"]), outcome.newTip);
+    assert.equal(outcome.warnings.length, 1);
+    assert.match(outcome.warnings[0], /confirm/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("planPrune refuses a branch name that git would not accept, before it reaches any refspec", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-badbranch-"));
+  try {
+    const { vault } = buildVault(base, 2);
+    // A colon would shift the split point of --force-with-lease=<ref>:<expect>.
+    for (const branch of ["a:b", "a..b", "has space", "x@{1}", ""]) {
+      assert.throws(() => planPrune(vault, branch, 2), /Invalid vault branch/, `branch ${JSON.stringify(branch)} must be refused`);
+    }
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("applyPrune warns, but does not fail, when the remote reports another tip after the push", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-othertip-"));
+  try {
+    const { remote, vault } = buildVault(base, 6);
+    const elsewhere = seedBare(base, "elsewhere"); // stands in for a remote that moved on (another computer pushed right after us)
+    run(vault, ["config", "remote.origin.pushurl", remote]);
+    run(vault, ["remote", "set-url", "origin", elsewhere]);
+
+    const outcome = applyPrune(vault, planPrune(vault, "main", 2));
+
+    assert.equal(outcome.pushed, true);
+    assert.equal(run(remote, ["rev-list", "--count", "main"]), "2");
+    assert.equal(outcome.warnings.length, 1);
+    assert.match(outcome.warnings[0], /instead of/);
   } finally {
     rmSync(base, { recursive: true, force: true });
   }

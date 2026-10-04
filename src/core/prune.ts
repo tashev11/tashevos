@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 export const DEFAULT_PRUNE_KEEP = 10;
+export const MAX_PRUNE_KEEP = 10_000;
 
 export interface PrunePlan {
   branch: string;
@@ -62,13 +63,25 @@ function objectNames(listing: string): string[] {
 }
 
 export function assertKeep(keep: number): void {
-  if (!Number.isInteger(keep) || keep < 1) throw new Error("Prune keep must be an integer of at least 1.");
+  if (!Number.isInteger(keep) || keep < 1 || keep > MAX_PRUNE_KEEP) throw new Error(`Prune keep must be an integer between 1 and ${MAX_PRUNE_KEEP}.`);
+}
+
+// The branch name comes from sync.json and ends up inside refspecs, so it must be a name git itself accepts
+// (a colon, "..", "@{" or a space would change how --force-with-lease=<ref>:<expect> is split).
+function assertBranch(branch: string): void {
+  if (spawnSync("git", ["check-ref-format", `refs/heads/${branch}`], { stdio: "ignore" }).status !== 0) throw new Error(`Invalid vault branch name "${branch}".`);
+}
+
+// The merge commits among `commits`: replaying them as single-parent commits would flatten their second parent away.
+function mergesIn(vault: string, commits: string[]): string[] {
+  return lines(git(vault, ["rev-list", "--merges", "--no-walk=unsorted", "--stdin"], { input: commits.join("\n") + "\n" }));
 }
 
 // Plans a history prune without writing anything: only read-only plumbing commands run here. The history is rewritten
 // down to `keep` commits only once it is longer than `rewriteAbove` (default: keep), so a caller can wait for it to grow.
 export function planPrune(vault: string, branch: string, keep: number, rewriteAbove = keep): PrunePlan {
   assertKeep(keep);
+  assertBranch(branch);
   if (!Number.isInteger(rewriteAbove) || rewriteAbove < keep) throw new Error("Prune rewriteAbove must be an integer of at least keep.");
   let tip: string;
   try { tip = git(vault, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`]); }
@@ -76,6 +89,7 @@ export function planPrune(vault: string, branch: string, keep: number, rewriteAb
   const chain = lines(git(vault, ["rev-list", "--first-parent", tip]));
   const rewrite = chain.length > rewriteAbove;
   const kept = rewrite ? chain.slice(0, keep) : chain;
+  const merges = rewrite ? mergesIn(vault, kept) : [];
 
   const window = new Set(objectNames(git(vault, ["rev-list", "--objects", "--no-walk=unsorted", "--stdin"], { input: kept.join("\n") + "\n" })));
   const retained = new Set(window);
@@ -109,7 +123,10 @@ export function planPrune(vault: string, branch: string, keep: number, rewriteAb
     bytesReclaimable: bytesOnDisk - bytesRetained,
     // The new root commit shares no history with the remote's, so git re-sends every object of the kept window.
     bytesToUpload: rewrite ? bytesInWindow : 0,
-    warnings: others.length ? [`${others.length} other ref(s) keep their history alive and are left alone: ${others.map(([name]) => name).join(", ")}`] : []
+    warnings: [
+      ...(merges.length ? [`${merges.length} merge commit(s) among the newest ${keep}: a rewrite would flatten them, so applying is refused`] : []),
+      ...(others.length ? [`${others.length} other ref(s) keep their history alive and are left alone: ${others.map(([name]) => name).join(", ")}`] : [])
+    ]
   };
 }
 
@@ -163,6 +180,7 @@ export function applyPrune(vault: string, plan: PrunePlan): PruneOutcome {
       throw new Error(`Vault branch "${branch}" has commits that are not on the remote; run a sync first. Nothing was changed.`);
     }
     const kept = lines(git(vault, ["rev-list", "--first-parent", `--max-count=${plan.keep}`, plan.tip]));
+    if (mergesIn(vault, kept).length) throw new Error(`Vault branch "${branch}" has merge commits among the newest ${plan.keep}; a rewrite would flatten them. Nothing was changed.`);
     newTip = rebuildHistory(vault, kept);
     if (git(vault, ["rev-parse", `${newTip}^{tree}`]) !== git(vault, ["rev-parse", `${plan.tip}^{tree}`])) {
       throw new Error("The rewritten history does not match the current vault data; nothing was pushed.");
@@ -176,8 +194,12 @@ export function applyPrune(vault: string, plan: PrunePlan): PruneOutcome {
       throw new Error(`The remote refused the rewritten history: ${detail}`);
     }
     git(vault, ["update-ref", "-m", "tashevos: prune vault history", `refs/heads/${branch}`, newTip, plan.tip]);
-    const remoteTip = git(vault, ["ls-remote", "origin", `refs/heads/${branch}`]).split(/\s+/)[0];
-    if (remoteTip !== newTip) throw new Error(`The remote reports ${remoteTip || "no branch"} instead of the rewritten ${newTip}.`);
+    // The push already succeeded, so a failed or surprising check is only a warning: the remote may be unreachable for
+    // a moment, or another computer may have pushed on top of the new history already.
+    const check = gitRun(vault, ["ls-remote", "origin", `refs/heads/${branch}`]);
+    const remoteTip = check.stdout.trim().split(/\s+/)[0];
+    if (check.status !== 0) warnings.push(`Could not confirm the remote tip after the push: ${(check.stderr || check.stdout || "ls-remote failed").trim()}`);
+    else if (remoteTip !== newTip) warnings.push(`The remote reports ${remoteTip || "no branch"} instead of ${newTip.slice(0, 12)}; another computer may have pushed since.`);
   }
 
   // Free the space first: pruning loose objects needs no extra disk. Whatever is still unreachable after that sits

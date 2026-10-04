@@ -14,7 +14,7 @@ tash sync prune --keep 10 --yes    # rewrite the remote history and reclaim the 
 ```
 
 - Without `--yes` nothing is changed. `--dry-run` is the explicit spelling of the same thing and wins over `--yes`.
-- `--keep` is the number of newest vault commits that survive (default 10, at least 1). Checkpoints arrive a few times a day, so 10 is roughly a few days of rollback. `keep` counts commits, not bytes: how much stays depends on which projects changed in them.
+- `--keep` is the number of newest vault commits that survive (default 10, from 1 to 10 000). Checkpoints arrive a few times a day, so 10 is roughly a few days of rollback. `keep` counts commits, not bytes: how much stays depends on which projects changed in them.
 - The report is computed from the local clone and works offline. A computer that lags behind may still see the old history until it syncs; `--yes` always fetches first.
 
 On the real vault above, `--keep 10` frees about 300 MiB locally and leaves about 50 MiB; `--keep 1` frees about 320 MiB.
@@ -24,16 +24,19 @@ On the real vault above, `--keep 10` frees about 300 MiB locally and leaves abou
 1. Takes the same lock as `tash autosync tick`, so it never overlaps with a background pass.
 2. Fetches the remote and plans the rewrite against the fetched tip.
 3. Replays the newest N commits as a new chain: same trees, messages, authors and dates, but the oldest one has no parent. The new tip must have exactly the tree of the old tip, otherwise nothing is pushed.
-4. Pushes with `--force-with-lease` on the exact tip it fetched. If another computer pushed in the meantime the push is refused and nothing is lost; a plain `--force` is never used. The remote is then checked to point at the new tip.
+4. Pushes with `--force-with-lease` on the exact tip it fetched. If another computer pushed in the meantime the push is refused and nothing is lost; a plain `--force` is never used. Afterwards the remote is asked for its tip; since the rewrite has already happened, an unexpected or missing answer (another computer may have pushed on top already) is reported as a warning, not an error.
 5. Moves the local branch, expires the reflog and deletes the unreachable objects. A repack (`git gc`) runs only when something unreachable is left inside a pack, as in a freshly cloned vault.
 
 The pruning never reads the recovery key; the vault is handled as opaque Git objects.
+
+It refuses to rewrite, and changes nothing, when the vault branch holds commits the remote has not seen, when the remote moved after the plan, or when the newest N commits contain a merge commit (the vault never creates one, and replaying it would drop its second parent). Merge commits older than the kept window go away with the rest of the old history.
 
 A history that is already within `--keep` is not rewritten and nothing is pushed, but the local garbage is still reclaimed. That makes the command safe to run on every computer.
 
 ## What it costs
 
 - **Upload.** The new root commit has no common history with the old one, so Git cannot tell the remote already has the kept objects and re-sends the whole kept window (about 50 MiB for `--keep 10` on the vault above, 33 MiB for `--keep 1`). The report prints this as `Upload`.
+- **Download.** For the same reason every other computer downloads the kept window once, the first time it syncs after a rewrite.
 - **Time.** Building that pack and repacking take seconds to a minute on a vault of this size.
 - **Remote disk.** The Git host drops the unreachable old objects on its own garbage-collection schedule; the remote's reported size may not shrink immediately.
 - **Rollback depth.** After a prune only the kept commits can be restored from the vault history.
