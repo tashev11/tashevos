@@ -130,7 +130,7 @@ tash resume
 
 The recovery key is generated locally and never written to the vault. Retrieve it only when enrolling another trusted device with `tash sync key`. The remote stores an AES-256-GCM + scrypt encrypted payload; Git history gives you previous checkpoint versions.
 
-**The vault history can be bounded.** Encrypted checkpoints cannot be compressed, so every version stays at full size. `tash sync prune --keep 10` keeps the newest checkpoints and frees the rest; without `--yes` it only reports how much it would free. `tash autosync prune --keep 10` lets autosync do it automatically (off by default). See [docs/VAULT_PRUNING.md](docs/VAULT_PRUNING.md).
+**The vault history can be bounded.** Encrypted checkpoints cannot be compressed, so every version stays at full size. `tash sync prune --keep 10` keeps the newest checkpoints and frees the rest; without `--yes` it only reports how much it would free. `tash autosync prune --keep 10 --yes` lets autosync do it automatically (off by default; without `--yes` it only previews what the first pass would do), and `tash autosync status` / `tash doctor` warn when the vault has grown again. See [docs/VAULT_PRUNING.md](docs/VAULT_PRUNING.md).
 
 **Autosync is change-aware:** it fingerprints the Git HEAD, staged changes, unstaged changes and safe untracked files. Unchanged states are skipped, secret-like untracked files do not trigger a checkpoint, and a manual checkpoint is not duplicated by the next background pass. The built-in service installer uses macOS `launchd` or a Linux user `systemd` timer; other platforms can schedule `tash autosync tick`.
 
@@ -217,7 +217,7 @@ This is the foundation for switching between Claude, Codex, Cursor, Gemini and f
 | `tash autosync add [path]` | Register a project for automatic checkpoints |
 | `tash autosync install --interval 300` | Install the background scheduler |
 | `tash autosync status` | Show registered projects and last result |
-| `tash autosync prune --keep N` | Let autosync bound the vault history (opt-in; `--off` disables) |
+| `tash autosync prune --keep N [--yes]` | Preview, or with `--yes` turn on, automatic vault pruning (`--off` disables) |
 | `tash reddit init/auth/status` | Configure and inspect the Reddit ↔ GitHub bridge |
 | `tash reddit tick/install` | Run once or install the background Reddit bridge |
 

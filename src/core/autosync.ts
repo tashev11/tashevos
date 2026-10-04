@@ -5,8 +5,8 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { ensureDir, readJson, writeJson } from "../lib/fs.js";
 import { findProjectRoot } from "../lib/fs.js";
-import { createCheckpoint, getSyncStatus, getWorkingStateFingerprint, pruneVault } from "./sync.js";
-import { assertKeep } from "./prune.js";
+import { createCheckpoint, getSyncStatus, getVaultStats, getWorkingStateFingerprint, pruneVault } from "./sync.js";
+import { DEFAULT_PRUNE_KEEP, VAULT_WARN_BYTES, VAULT_WARN_COMMITS, assertKeep, formatMiB } from "./prune.js";
 
 const AUTOSYNC_SCHEMA = 1;
 const DEFAULT_INTERVAL_SECONDS = 300;
@@ -38,6 +38,7 @@ export interface AutosyncProjectState {
 
 export interface AutosyncPruneState {
   lastAttemptAt?: string;
+  lastRewriteAt?: string;
   lastResult?: "pruned" | "reclaimed" | "error";
   lastFreedBytes?: number;
   lastCommitsDropped?: number;
@@ -69,13 +70,14 @@ function lockPath(): string { return join(globalHome(), "autosync.lock"); }
 function logPath(): string { return join(globalHome(), "autosync.log"); }
 function errorLogPath(): string { return join(globalHome(), "autosync-error.log"); }
 function pruneStatePath(): string { return join(globalHome(), "autosync-prune.json"); }
+function readPruneState(): AutosyncPruneState { return readJson<AutosyncPruneState | null>(pruneStatePath(), {}) ?? {}; }
 
 function defaultConfig(): AutosyncConfig {
   return { schemaVersion: AUTOSYNC_SCHEMA, intervalSeconds: DEFAULT_INTERVAL_SECONDS, projects: [] };
 }
 
 export function readAutosyncConfig(): AutosyncConfig {
-  const raw = readJson<Partial<AutosyncConfig>>(configPath(), {});
+  const raw = readJson<Partial<AutosyncConfig> | null>(configPath(), {}) ?? {};
   return {
     schemaVersion: typeof raw.schemaVersion === "number" ? raw.schemaVersion : AUTOSYNC_SCHEMA,
     intervalSeconds: typeof raw.intervalSeconds === "number" && raw.intervalSeconds >= MIN_INTERVAL_SECONDS ? raw.intervalSeconds : DEFAULT_INTERVAL_SECONDS,
@@ -227,6 +229,7 @@ export function setAutosyncPrune(keep: number | null): AutosyncConfig {
   else {
     assertKeep(keep);
     config.prune = { keep };
+    writeJson(pruneStatePath(), {}); // a failure from before it was last turned off is history, not news
   }
   writeConfig(config);
   return config;
@@ -238,23 +241,30 @@ function safeError(error: unknown): string {
 }
 
 // Opt-in only: the pass below rewrites the vault history and force-pushes it (with a lease), so it never runs unless
-// the owner enabled it with `tash autosync prune`. Runs inside the tick's lock, at most once every 24 hours.
+// the owner enabled it with `tash autosync prune`. Runs inside the tick's lock. Every rewrite re-uploads the kept
+// window, so it rewrites only when the history is twice as long as keep, and then at most once every 24 hours. A pass
+// that finds nothing to rewrite is just a daily local check: it must not use up the day, or a history that passes the
+// limit an hour later would wait until tomorrow. The local clone tells (offline) which of the two gates applies.
 function runScheduledPrune(config: AutosyncConfig): AutosyncPruneResult | undefined {
   if (!config.prune) return undefined;
-  const state = readJson<AutosyncPruneState>(pruneStatePath(), {});
-  if (Date.now() - Date.parse(state.lastAttemptAt ?? "") < PRUNE_INTERVAL_MS) return { result: "not-due" };
+  const keep = config.prune.keep;
+  const state = readPruneState();
+  const stats = getVaultStats();
+  const rewriteDue = stats !== null && stats.commits > 2 * keep;
+  if (Date.now() - Date.parse((rewriteDue ? state.lastRewriteAt : state.lastAttemptAt) ?? "") < PRUNE_INTERVAL_MS) return { result: "not-due" };
   const attemptedAt = new Date().toISOString();
   try {
-    // Every rewrite re-uploads the kept window, so wait until the history is twice as long as keep.
-    const { plan, outcome } = pruneVault({ keep: config.prune.keep, apply: true, rewriteAbove: 2 * config.prune.keep });
+    const { plan, outcome } = pruneVault({ keep, apply: true, rewriteAbove: 2 * keep });
     const result = plan.rewrite ? "pruned" : "reclaimed";
     const commitsDropped = plan.rewrite ? plan.commitsDropped : 0;
     const freedBytes = outcome?.bytesFreed ?? 0;
-    writeJson(pruneStatePath(), { lastAttemptAt: attemptedAt, lastResult: result, lastFreedBytes: freedBytes, lastCommitsDropped: commitsDropped });
+    const lastRewriteAt = plan.rewrite ? attemptedAt : state.lastRewriteAt;
+    writeJson(pruneStatePath(), { lastAttemptAt: attemptedAt, ...(lastRewriteAt ? { lastRewriteAt } : {}), lastResult: result, lastFreedBytes: freedBytes, lastCommitsDropped: commitsDropped });
     return { result, commitsDropped, freedBytes };
   } catch (error) {
     const message = safeError(error);
-    writeJson(pruneStatePath(), { lastAttemptAt: attemptedAt, lastResult: "error", lastError: message });
+    // A failed attempt counts for both gates, so a persistent failure is not retried within the day.
+    writeJson(pruneStatePath(), { lastAttemptAt: attemptedAt, lastRewriteAt: attemptedAt, lastResult: "error", lastError: message });
     return { result: "error", error: message };
   }
 }
@@ -312,7 +322,7 @@ export function runAutosyncTick(): { locked: boolean; results: AutosyncTickResul
 }
 
 export function getAutosyncStatus(): { config: AutosyncConfig; states: Record<string, AutosyncProjectState>; prune: AutosyncPruneState } {
-  return { config: readAutosyncConfig(), states: readStates(), prune: readJson<AutosyncPruneState>(pruneStatePath(), {}) };
+  return { config: readAutosyncConfig(), states: readStates(), prune: readPruneState() };
 }
 
 function xml(value: string): string {
@@ -384,4 +394,30 @@ export function uninstallAutosyncService(): boolean {
     return existed;
   }
   return false;
+}
+
+export interface VaultHealth {
+  commits: number;
+  bytes: number;
+  level: "ok" | "grown" | "prune-failed";
+  detail: string;
+}
+
+// Pure verdict on the vault: grown again (automation is off and a limit is passed), or its automatic prune is failing.
+export function assessVault(stats: { commits: number; bytes: number }, prune: { keep: number } | undefined, last: AutosyncPruneState): VaultHealth {
+  const size = `${stats.commits} commits, ${formatMiB(stats.bytes)}`;
+  if (prune && last.lastResult === "error") {
+    return { ...stats, level: "prune-failed", detail: `${size}: the last automatic prune failed (${last.lastError ?? "unknown error"}). Check it with \`tash sync prune --keep ${prune.keep}\`.` };
+  }
+  if (!prune && (stats.commits > VAULT_WARN_COMMITS || stats.bytes > VAULT_WARN_BYTES)) {
+    return { ...stats, level: "grown", detail: `${size}: it has grown again. Preview the cleanup with \`tash sync prune --keep ${DEFAULT_PRUNE_KEEP}\`, or let autosync do it with \`tash autosync prune --keep ${DEFAULT_PRUNE_KEEP} --yes\`.` };
+  }
+  return { ...stats, level: "ok", detail: size + (prune ? `, automatic prune on (keep ${prune.keep})` : "") };
+}
+
+// Offline and read-only; null until sync is configured and the vault is cloned.
+export function getVaultHealth(): VaultHealth | null {
+  const stats = getVaultStats();
+  if (!stats) return null;
+  return assessVault(stats, readAutosyncConfig().prune, readPruneState());
 }

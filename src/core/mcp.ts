@@ -8,6 +8,7 @@ import { compileContext } from "./context.js";
 import { recordHandoff } from "./handoff.js";
 import { readRecentEvents } from "./store.js";
 import { createCheckpoint, getSyncStatus } from "./sync.js";
+import { getVaultHealth } from "./autosync.js";
 
 const SERVER_VERSION = "0.1.0-alpha.3";
 
@@ -47,7 +48,7 @@ export function createTashevMcpServer(): McpServer {
 
   server.registerTool("tashevos_status", {
     title: "Inspect TashevOS continuity status",
-    description: "Inspect Git, detected AI tools, recent continuity events and the latest encrypted remote checkpoint.",
+    description: "Inspect Git, detected AI tools, recent continuity events, the latest encrypted remote checkpoint and the size of the encrypted vault (vault.level is \"grown\" when it needs a cleanup; tell the user).",
     inputSchema: {
       path: z.string().optional().describe("Project path. Defaults to the AI client's current working directory.")
     },
@@ -59,7 +60,8 @@ export function createTashevMcpServer(): McpServer {
       git: getGitSnapshot(root),
       detectedAI: detectAgents(root).filter((item) => item.detected).map((item) => item.name),
       recentEvents: readRecentEvents(root, 10),
-      remoteCheckpoint: safeSyncStatus(root)
+      remoteCheckpoint: safeSyncStatus(root),
+      vault: getVaultHealth()
     };
     return textResult(JSON.stringify(payload, null, 2));
   });

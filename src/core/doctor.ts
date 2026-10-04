@@ -6,6 +6,7 @@ import type { DoctorCheck } from "../types.js";
 import { DATA_DIR, initializeStore } from "./store.js";
 import { detectAgents } from "./agents.js";
 import { installInstructionAdapters } from "./instructions.js";
+import { getVaultHealth } from "./autosync.js";
 
 export async function runDoctor(root: string, fix = false): Promise<DoctorCheck[]> {
   if (fix) {
@@ -39,5 +40,9 @@ export async function runDoctor(root: string, fix = false): Promise<DoctorCheck[
     health: snapshot.dirty ? "warn" : "ok",
     detail: snapshot.dirty ? String(snapshot.changedFiles) + " changed file(s)" : "clean"
   });
+
+  // Offline and read-only; skipped when sync is not configured. A vault that merely grew is a warning, never a failure.
+  const vault = getVaultHealth();
+  if (vault) checks.push({ id: "vault", label: "Encrypted vault", health: vault.level === "ok" ? "ok" : "warn", detail: vault.detail });
   return checks;
 }
