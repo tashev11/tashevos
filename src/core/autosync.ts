@@ -5,12 +5,14 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { ensureDir, readJson, writeJson } from "../lib/fs.js";
 import { findProjectRoot } from "../lib/fs.js";
-import { createCheckpoint, getSyncStatus, getWorkingStateFingerprint } from "./sync.js";
+import { createCheckpoint, getSyncStatus, getWorkingStateFingerprint, pruneVault } from "./sync.js";
+import { assertKeep } from "./prune.js";
 
 const AUTOSYNC_SCHEMA = 1;
 const DEFAULT_INTERVAL_SECONDS = 300;
 const MIN_INTERVAL_SECONDS = 60;
 const SERVICE_LABEL = "com.tashevos.autosync";
+const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export interface AutosyncProject {
   path: string;
@@ -22,6 +24,7 @@ export interface AutosyncConfig {
   schemaVersion: number;
   intervalSeconds: number;
   projects: AutosyncProject[];
+  prune?: { keep: number };
 }
 
 export interface AutosyncProjectState {
@@ -31,6 +34,21 @@ export interface AutosyncProjectState {
   lastVaultCommit?: string;
   lastResult?: "checkpoint" | "unchanged" | "remote-current" | "error";
   lastError?: string;
+}
+
+export interface AutosyncPruneState {
+  lastAttemptAt?: string;
+  lastResult?: "pruned" | "reclaimed" | "error";
+  lastFreedBytes?: number;
+  lastCommitsDropped?: number;
+  lastError?: string;
+}
+
+export interface AutosyncPruneResult {
+  result: "pruned" | "reclaimed" | "not-due" | "error";
+  commitsDropped?: number;
+  freedBytes?: number;
+  error?: string;
 }
 
 export interface AutosyncTickResult {
@@ -50,6 +68,7 @@ function statePath(): string { return join(globalHome(), "autosync-state.json");
 function lockPath(): string { return join(globalHome(), "autosync.lock"); }
 function logPath(): string { return join(globalHome(), "autosync.log"); }
 function errorLogPath(): string { return join(globalHome(), "autosync-error.log"); }
+function pruneStatePath(): string { return join(globalHome(), "autosync-prune.json"); }
 
 function defaultConfig(): AutosyncConfig {
   return { schemaVersion: AUTOSYNC_SCHEMA, intervalSeconds: DEFAULT_INTERVAL_SECONDS, projects: [] };
@@ -62,7 +81,8 @@ export function readAutosyncConfig(): AutosyncConfig {
     intervalSeconds: typeof raw.intervalSeconds === "number" && raw.intervalSeconds >= MIN_INTERVAL_SECONDS ? raw.intervalSeconds : DEFAULT_INTERVAL_SECONDS,
     projects: Array.isArray(raw.projects) ? raw.projects
       .filter((item): item is AutosyncProject => Boolean(item && typeof item.path === "string"))
-      .map((item) => ({ path: resolve(item.path), enabled: item.enabled !== false, ...(item.task ? { task: String(item.task) } : {}) })) : []
+      .map((item) => ({ path: resolve(item.path), enabled: item.enabled !== false, ...(item.task ? { task: String(item.task) } : {}) })) : [],
+    ...(Number.isInteger(raw.prune?.keep) && (raw.prune?.keep as number) >= 1 ? { prune: { keep: raw.prune?.keep as number } } : {})
   };
 }
 
@@ -144,6 +164,14 @@ function releaseLock(fd: number): void {
   rmSync(lockPath(), { force: true });
 }
 
+// Runs `task` while holding the autosync lock, so it never overlaps with a pass that is writing to the vault.
+export function withAutosyncLock<T>(task: () => T): { locked: true } | { locked: false; value: T } {
+  const fd = acquireLock();
+  if (fd === null) return { locked: true };
+  try { return { locked: false, value: task() }; }
+  finally { releaseLock(fd); }
+}
+
 export function registerAutosyncProject(path: string, task = "", initialCheckpoint = true): { project: AutosyncProject; checkpoint?: string } {
   const root = canonicalProjectPath(path);
   const config = readAutosyncConfig();
@@ -193,12 +221,45 @@ export function setAutosyncInterval(seconds: number): AutosyncConfig {
   return config;
 }
 
+export function setAutosyncPrune(keep: number | null): AutosyncConfig {
+  const config = readAutosyncConfig();
+  if (keep === null) delete config.prune;
+  else {
+    assertKeep(keep);
+    config.prune = { keep };
+  }
+  writeConfig(config);
+  return config;
+}
+
 function safeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error || "unknown error");
   return message.replace(/[\r\n]+/g, " ").slice(0, 500);
 }
 
-export function runAutosyncTick(): { locked: boolean; results: AutosyncTickResult[] } {
+// Opt-in only: the pass below rewrites the vault history and force-pushes it (with a lease), so it never runs unless
+// the owner enabled it with `tash autosync prune`. Runs inside the tick's lock, at most once every 24 hours.
+function runScheduledPrune(config: AutosyncConfig): AutosyncPruneResult | undefined {
+  if (!config.prune) return undefined;
+  const state = readJson<AutosyncPruneState>(pruneStatePath(), {});
+  if (Date.now() - Date.parse(state.lastAttemptAt ?? "") < PRUNE_INTERVAL_MS) return { result: "not-due" };
+  const attemptedAt = new Date().toISOString();
+  try {
+    // Every rewrite re-uploads the kept window, so wait until the history is twice as long as keep.
+    const { plan, outcome } = pruneVault({ keep: config.prune.keep, apply: true, rewriteAbove: 2 * config.prune.keep });
+    const result = plan.rewrite ? "pruned" : "reclaimed";
+    const commitsDropped = plan.rewrite ? plan.commitsDropped : 0;
+    const freedBytes = outcome?.bytesFreed ?? 0;
+    writeJson(pruneStatePath(), { lastAttemptAt: attemptedAt, lastResult: result, lastFreedBytes: freedBytes, lastCommitsDropped: commitsDropped });
+    return { result, commitsDropped, freedBytes };
+  } catch (error) {
+    const message = safeError(error);
+    writeJson(pruneStatePath(), { lastAttemptAt: attemptedAt, lastResult: "error", lastError: message });
+    return { result: "error", error: message };
+  }
+}
+
+export function runAutosyncTick(): { locked: boolean; results: AutosyncTickResult[]; prune?: AutosyncPruneResult } {
   const fd = acquireLock();
   if (fd === null) return { locked: true, results: [] };
   try {
@@ -243,14 +304,15 @@ export function runAutosyncTick(): { locked: boolean; results: AutosyncTickResul
       }
     }
     writeStates(states);
-    return { locked: false, results };
+    const prune = runScheduledPrune(config);
+    return { locked: false, results, ...(prune ? { prune } : {}) };
   } finally {
     releaseLock(fd);
   }
 }
 
-export function getAutosyncStatus(): { config: AutosyncConfig; states: Record<string, AutosyncProjectState> } {
-  return { config: readAutosyncConfig(), states: readStates() };
+export function getAutosyncStatus(): { config: AutosyncConfig; states: Record<string, AutosyncProjectState>; prune: AutosyncPruneState } {
+  return { config: readAutosyncConfig(), states: readStates(), prune: readJson<AutosyncPruneState>(pruneStatePath(), {}) };
 }
 
 function xml(value: string): string {

@@ -7,6 +7,8 @@ import { gzipSync, gunzipSync } from "node:zlib";
 import { DATA_DIR, appendEvent, initializeStore, readRecentEvents, updateState } from "./store.js";
 import { getGitSnapshot } from "../lib/git.js";
 import { ensureDir, readJson, writeJson } from "../lib/fs.js";
+import { DEFAULT_PRUNE_KEEP, applyPrune, assertKeep, planPrune } from "./prune.js";
+import type { PruneOutcome, PrunePlan } from "./prune.js";
 
 const SYNC_SCHEMA = 1;
 const MAX_UNTRACKED_FILE = 5 * 1024 * 1024;
@@ -487,4 +489,25 @@ export function getSyncStatus(root: string): Omit<ResumeResult, "untracked"> & {
     skippedUntracked: payload.skippedUntracked,
     ageMs: Math.max(0, Date.now() - Date.parse(payload.createdAt))
   };
+}
+
+export interface VaultPruneReport {
+  plan: PrunePlan;
+  applied: boolean;
+  outcome?: PruneOutcome;
+}
+
+// Bounds the vault history. Without `apply` it only reports what would be freed, from the local clone and without
+// touching the network. With `apply` it catches up with the remote first, so the rewrite is built on its current tip.
+// It never reads the sync key: the vault is pruned as opaque git objects.
+export function pruneVault(options: { keep?: number; apply?: boolean; rewriteAbove?: number } = {}): VaultPruneReport {
+  const keep = options.keep ?? DEFAULT_PRUNE_KEEP;
+  assertKeep(keep);
+  const config = readSyncConfig();
+  const vault = vaultPath();
+  if (!existsSync(join(vault, ".git"))) throw new Error("The vault is not cloned yet. Run: tash sync init --remote <git-url>");
+  if (!options.apply) return { plan: planPrune(vault, config.branch, keep, options.rewriteAbove), applied: false };
+  refreshVault(config);
+  const plan = planPrune(vault, config.branch, keep, options.rewriteAbove);
+  return { plan, applied: true, outcome: applyPrune(vault, plan) };
 }
