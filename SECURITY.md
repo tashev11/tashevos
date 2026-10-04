@@ -28,3 +28,4 @@ Supported security updates will initially target the latest alpha/minor line whi
 - `resume` refuses to overwrite a dirty worktree by default; `--force` first creates a Git rescue stash.
 - Background autosync fingerprints only checkpoint-eligible state; secret-like untracked files are excluded before fingerprinting and therefore do not trigger uploads.
 - Autosync uses a process lock to prevent overlapping scheduler/manual passes and skips identical or already-manually-saved remote fingerprints.
+- `tash sync prune` rewrites the vault history only with an explicit `--yes`, or after the owner opted in to `tash autosync prune`. It pushes with `--force-with-lease` on the exact tip it fetched, never with a plain `--force`, and it never reads the recovery key.

@@ -9,13 +9,38 @@ import { appendEvent, initializeStore, readRecentEvents, updateState } from "./c
 import { installInstructionAdapters } from "./core/instructions.js";
 import { runDoctor } from "./core/doctor.js";
 import { compileContext } from "./core/context.js";
-import { createCheckpoint, getSyncKey, getSyncStatus, initializeSync, resumeCheckpoint } from "./core/sync.js";
-import { autosyncProjectKey, getAutosyncStatus, installAutosyncService, registerAutosyncProject, runAutosyncTick, setAutosyncInterval, uninstallAutosyncService, unregisterAutosyncProject } from "./core/autosync.js";
+import { createCheckpoint, getSyncKey, getSyncStatus, initializeSync, pruneVault, resumeCheckpoint } from "./core/sync.js";
+import type { VaultPruneReport } from "./core/sync.js";
+import { DEFAULT_PRUNE_KEEP } from "./core/prune.js";
+import { autosyncProjectKey, getAutosyncStatus, installAutosyncService, registerAutosyncProject, runAutosyncTick, setAutosyncInterval, setAutosyncPrune, uninstallAutosyncService, unregisterAutosyncProject, withAutosyncLock } from "./core/autosync.js";
 import { configureRedditBridge, getRedditBridgeStatus, importRedditCredentialsFromEnv, installRedditBridgeService, runRedditBridgeTick, uninstallRedditBridgeService } from "./core/reddit.js";
 import { serveTashevMcp } from "./core/mcp.js";
 import { recordHandoff } from "./core/handoff.js";
 
 const VERSION = "0.1.0-alpha.3";
+
+function mib(bytes: number): string { return (bytes / 1048576).toFixed(1) + " MiB"; }
+
+function printPruneReport(report: VaultPruneReport): void {
+  const { plan, outcome } = report;
+  console.log(pc.bold(report.applied ? "TashevOS vault pruned" : "TashevOS vault prune (dry run)"));
+  for (const warning of plan.warnings) console.log(pc.yellow("Warning: " + warning));
+  if (!plan.rewrite) console.log("History: " + plan.commitsTotal + " commits, already within keep " + plan.keep + "; the remote history is not rewritten");
+  else console.log("History: " + plan.commitsTotal + " commits; " + (report.applied ? "kept" : "would keep") + " the newest " + plan.commitsKept + ", " + (report.applied ? "dropped " : "would drop ") + plan.commitsDropped);
+  if (outcome) {
+    if (outcome.pushed) console.log("Remote: rewritten with --force-with-lease, now at " + outcome.newTip.slice(0, 12));
+    console.log("Local objects: freed " + mib(outcome.bytesFreed) + " (" + mib(outcome.bytesBefore) + " -> " + mib(outcome.bytesAfter) + ")");
+    for (const warning of outcome.warnings) console.log(pc.yellow("Warning: " + warning));
+    return;
+  }
+  console.log("Local objects: " + mib(plan.bytesOnDisk) + " on disk, about " + mib(plan.bytesReclaimable) + " would be freed (" + mib(plan.bytesRetained) + " stay)");
+  if (plan.rewrite) {
+    console.log("Remote: the history would be replaced with --force-with-lease on " + plan.tip.slice(0, 12) + "; the host frees its own copy on its garbage-collection schedule");
+    console.log("Upload: about " + mib(plan.bytesToUpload) + " (git cannot link the new history to the old one, so it re-sends the kept objects)");
+  }
+  console.log("Other computers pick up the new history on their next sync; run this command there to reclaim their local space.");
+  console.log(pc.dim("Nothing was changed. Re-run with --yes to apply."));
+}
 const program = new Command();
 
 program.name("tash")
@@ -250,6 +275,23 @@ sync.command("pull")
   });
 
 
+sync.command("prune")
+  .option("--keep <n>", "number of newest vault commits to keep", String(DEFAULT_PRUNE_KEEP))
+  .option("--dry-run", "only report what would be freed (also the default without --yes)", false)
+  .option("--yes", "rewrite the vault history, force-push it with a lease and reclaim local space", false)
+  .description("Bound vault growth: keep the newest N checkpoints and reclaim the disk space of the rest")
+  .action((options: { keep: string; dryRun: boolean; yes: boolean }) => {
+    const keep = Number(options.keep);
+    if (!options.yes || options.dryRun) {
+      printPruneReport(pruneVault({ keep }));
+      return;
+    }
+    const guarded = withAutosyncLock(() => pruneVault({ keep, apply: true }));
+    if (guarded.locked) throw new Error("An autosync pass is running right now; try again in a minute.");
+    printPruneReport(guarded.value);
+  });
+
+
 const autosync = program.command("autosync").description("Automatically checkpoint changed projects in the encrypted vault");
 
 autosync.command("add")
@@ -281,16 +323,15 @@ autosync.command("tick")
       console.log("Autosync skipped: another pass is already running");
       return;
     }
-    if (!tick.results.length) {
-      console.log("Autosync: no registered projects");
-      return;
-    }
+    if (!tick.results.length) console.log("Autosync: no registered projects");
     for (const item of tick.results) {
       if (item.result === "checkpoint") console.log(`checkpoint ${item.path} ${item.vaultCommit?.slice(0, 12) || ""}`.trim());
       else if (item.result === "error") console.error(`error ${item.path}: ${item.error}`);
       else console.log(`${item.result} ${item.path}`);
     }
-    if (tick.results.some((item) => item.result === "error")) process.exitCode = 1;
+    if (tick.prune?.result === "pruned" || tick.prune?.result === "reclaimed") console.log("vault prune: " + tick.prune.result + ", dropped " + tick.prune.commitsDropped + " commits, freed " + mib(tick.prune.freedBytes ?? 0));
+    else if (tick.prune?.result === "error") console.error("vault prune error: " + tick.prune.error);
+    if (tick.results.some((item) => item.result === "error") || tick.prune?.result === "error") process.exitCode = 1;
   });
 
 autosync.command("status")
@@ -299,6 +340,8 @@ autosync.command("status")
     const status = getAutosyncStatus();
     console.log(pc.bold("TashevOS autosync"));
     console.log("Interval: " + status.config.intervalSeconds + "s");
+    console.log("Vault prune: " + (status.config.prune ? "keep the newest " + status.config.prune.keep + " commits, at most once a day" + (status.prune.lastResult ? " (last: " + status.prune.lastResult + " @ " + status.prune.lastAttemptAt + ")" : "") : "off"));
+    if (status.prune.lastError) console.log(pc.yellow("  prune error: " + status.prune.lastError));
     if (!status.config.projects.length) {
       console.log("Projects: none");
       return;
@@ -333,6 +376,22 @@ autosync.command("interval")
     if (!Number.isFinite(value) || value < 60) throw new Error("Autosync interval must be at least 60 seconds.");
     const config = setAutosyncInterval(value);
     console.log("Autosync interval: " + config.intervalSeconds + "s");
+  });
+
+autosync.command("prune")
+  .option("--keep <n>", "number of newest vault commits to keep", String(DEFAULT_PRUNE_KEEP))
+  .option("--off", "stop pruning the vault automatically", false)
+  .description("Let autosync bound the vault history once a day (rewrites it and force-pushes with a lease; off by default)")
+  .action((options: { keep: string; off: boolean }) => {
+    if (options.off) {
+      setAutosyncPrune(null);
+      console.log("Automatic vault prune: off");
+      return;
+    }
+    const config = setAutosyncPrune(Number(options.keep));
+    console.log(pc.bold("TashevOS automatic vault prune: on"));
+    console.log("Keeps the newest " + config.prune?.keep + " vault commits; runs from `tash autosync tick` at most once every 24 hours.");
+    console.log(pc.dim("Preview it first: tash sync prune --keep " + config.prune?.keep));
   });
 
 autosync.command("uninstall")
