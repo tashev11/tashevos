@@ -41,21 +41,65 @@ A history that is already within `--keep` is not rewritten and nothing is pushed
 - **Remote disk.** The Git host drops the unreachable old objects on its own garbage-collection schedule; the remote's reported size may not shrink immediately.
 - **Rollback depth.** After a prune only the kept commits can be restored from the vault history.
 
-## Other computers
+## Rolling it out the first time
 
-Another computer that is behind the vault needs no special handling. Its next sync fetches the rewritten history and resets to it (`fetch` followed by `checkout -B`; a checkpoint resets the vault clone to the remote before writing). A checkpoint that computer makes afterwards lands on top of the new history, and nothing from the old history is resurrected.
+1. **Report.** `tash sync prune --keep 10` changes nothing. Check the history length, the MiB freed and the `Upload`.
+2. **Optional safety net.** `git -C ~/.tashevos/vault bundle create <somewhere>/vault-before-prune.bundle --all` is the only undo: after `--yes` the old versions are deleted locally and kept by the Git host only until its own cleanup. It costs about the vault's size on disk, so put it where there is room (an external drive if the machine is tight) and delete it once everything works.
+3. **Apply.** `tash sync prune --keep 10 --yes`, preferably while no other computer is checkpointing. A collision only makes the push refuse; run it again.
+4. **Verify.** `git -C ~/.tashevos/vault rev-list --count HEAD` shows the kept number; `git -C ~/.tashevos/vault ls-remote origin refs/heads/main` and `rev-parse HEAD` agree; `tash sync status <project>` still decrypts the newest checkpoint; the next `tash autosync tick` ends without an error.
+5. **Other computers**, if there are any: see below.
+6. **Automation, last.** `tash autosync prune --keep 10` previews what the first pass would do; `--yes` turns it on.
 
-That computer still carries the old objects on its own disk. Run `tash sync prune --yes` there as well: it finds the history already short, pushes nothing and only frees the local space.
+## One computer, and a second one later
+
+With one computer the vault is an off-site backup of your checkpoints, and the kept commits are the rollback depth. There is nothing to do for other computers.
+
+A computer that joins later needs no prune: it clones the history, which is already short. Install TashevOS there, then run `tash sync init --remote <the same URL> --key <the recovery key>` and `tash sync status`; `tash resume` continues a project. Take the key from `tash sync key` on the first computer and move it through a password manager, never through chat or Git.
+
+A computer that was enrolled before the first prune still carries the old objects on its disk. Run `tash sync prune --yes` there once: it finds the history already short, pushes nothing and only frees the local space. Until then it works normally: its next sync fetches the rewritten history and resets to it (`fetch` followed by `checkout -B`; a checkpoint resets the vault clone to the remote before writing), and a checkpoint it makes afterwards lands on top of the new history. Nothing from the old history is resurrected.
+
+### Rehearsing a second computer on one computer
+
+This proves that enrolling and resuming work against your real, pruned vault before the second computer exists. It uses a temporary home, so nothing of the real one is touched, and the recovery key lives only in the environment of that one process: not on disk, not in a command line.
+
+```bash
+(
+  set -eo pipefail
+  REAL="$HOME/.tashevos"
+  PROJECT=/path/to/a/project/that/autosync/tracks
+  B="$(mktemp -d)"
+  trap 'rm -rf "$B"' EXIT
+  REMOTE="$(node -p "require('$REAL/sync.json').remote")"
+  PROJECT_REMOTE="$(git -C "$PROJECT" remote get-url origin)"
+  export TASHEVOS_HOME="$B/home"
+  tash sync init --remote "$REMOTE" >/dev/null
+  echo "1/4 the second computer cloned the vault: $(git -C "$B/home/vault" rev-list --count HEAD) commits, $(du -sh "$B/home/vault/.git" | cut -f1)"
+  export TASHEVOS_SYNC_KEY="$(TASHEVOS_HOME="$REAL" tash sync key)"
+  tash sync status "$PROJECT" | sed -n '2,4p'
+  echo "2/4 the newest checkpoint decrypted with the key of the first computer"
+  git clone -q "$PROJECT_REMOTE" "$B/project"
+  tash resume "$B/project" | sed -n '1,4p'
+  echo "3/4 resumed into a fresh clone at $(git -C "$B/project" rev-parse --short HEAD), $(git -C "$B/project" status --short | wc -l | tr -d ' ') changed file(s)"
+  echo "4/4 REHEARSAL PASSED; the temporary folder is removed on exit"
+)
+```
 
 ## Automatic pruning (opt-in)
 
 ```bash
-tash autosync prune --keep 10   # let `tash autosync tick` prune the vault
-tash autosync prune --off       # stop
-tash autosync status            # shows the policy and the last result
+tash autosync prune --keep 10         # preview: what the first pass would do; changes nothing
+tash autosync prune --keep 10 --yes   # turn it on
+tash autosync prune --off             # turn it off
+tash autosync status                  # shows the vault size, the policy and the last result
 ```
 
-It is off by default, because it force-pushes the vault branch. Once enabled, the pass runs inside `tash autosync tick`, at most once every 24 hours. Because every rewrite re-uploads the kept window, it rewrites the remote only when the history is longer than twice `--keep` and then cuts it back to `--keep`; in between it only reclaims local garbage. Failures are recorded in `~/.tashevos/autosync-prune.json` and are not retried within the day.
+It is off by default, and without `--yes` it only prints a preview, because turning it on lets `tash autosync tick` force-push the vault branch. The preview says whether the first pass, minutes after turning it on, would rewrite the remote right away (it does when the history is already longer than twice `--keep`) or only wait. It is computed offline from this computer's copy of the vault, so if another computer has checkpointed since, the real first pass may see more commits. Once enabled, `tash autosync tick` looks after the vault. Because every rewrite re-uploads the kept window, it rewrites the remote only when the history is longer than twice `--keep`, cuts it back to `--keep`, and then waits at least 24 hours before the next rewrite. While the history is still short it only does a daily local check (it reclaims garbage and rewrites nothing), and that check does not use up the day: the moment the history passes the limit, the next tick rewrites it. Failures are recorded in `~/.tashevos/autosync-prune.json` and are not retried within the day.
+
+While you are working, autosync can add several checkpoints an hour, each about the size of the project's bundle. On a very busy day the vault can therefore grow by a few hundred MiB between two rewrites; it never grows without a bound.
+
+## Growth warning
+
+While the automatic prune is off, the vault can quietly grow again. `tash autosync status` prints `Vault: <commits>, <size>` and warns, `tash doctor` adds an "Encrypted vault" check (a warning, never a failure), and the MCP `tashevos_status` tool carries a `vault` field whose `level` is `ok`, `grown` or `prune-failed`, so an AI agent can mention it at the start of a session. The vault counts as grown past 20 commits or 200 MiB, which is where the automatic prune would start rewriting it. With the automatic prune on, the warning stays quiet unless its last run failed. The check is offline and read-only.
 
 ## Notes
 

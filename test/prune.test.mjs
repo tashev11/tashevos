@@ -6,9 +6,13 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { applyPrune, planPrune } from "../dist/core/prune.js";
-import { createCheckpoint, getSyncStatus, initializeSync, pruneVault } from "../dist/core/sync.js";
-import { readAutosyncConfig, runAutosyncTick, setAutosyncInterval, setAutosyncPrune } from "../dist/core/autosync.js";
+import { applyPrune, planPrune, vaultStats } from "../dist/core/prune.js";
+import { createCheckpoint, getSyncStatus, getVaultStats, initializeSync, pruneVault } from "../dist/core/sync.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createTashevMcpServer } from "../dist/core/mcp.js";
+import { runDoctor } from "../dist/core/doctor.js";
+import { assessVault, getVaultHealth, readAutosyncConfig, runAutosyncTick, setAutosyncInterval, setAutosyncPrune } from "../dist/core/autosync.js";
 
 const KEY = "0123456789abcdef0123456789abcdef0123456789abcdef";
 const BLOB = 100 * 1024;
@@ -648,6 +652,7 @@ test("an autosync pass prunes the vault at most once every 24 hours", () => {
     const statePath = join(home, "autosync-prune.json");
     const state = JSON.parse(readFileSync(statePath, "utf8"));
     state.lastAttemptAt = new Date(Date.now() - 25 * 3600 * 1000).toISOString();
+    state.lastRewriteAt = state.lastAttemptAt;
     writeFileSync(statePath, JSON.stringify(state));
     const third = atHome(home, () => runAutosyncTick());
     assert.equal(third.prune.result, "pruned");
@@ -682,7 +687,7 @@ test("tash autosync prune turns the policy on and --off turns it off", () => {
   try {
     const home = join(base, "home");
 
-    const on = tash(home, ["autosync", "prune", "--keep", "7"]);
+    const on = tash(home, ["autosync", "prune", "--keep", "7", "--yes"]);
     assert.equal(on.status, 0, on.stderr);
     assert.deepEqual(atHome(home, () => readAutosyncConfig().prune), { keep: 7 });
 
@@ -910,6 +915,364 @@ test("applyPrune warns, but does not fail, when the remote reports another tip a
     assert.equal(run(remote, ["rev-list", "--count", "main"]), "2");
     assert.equal(outcome.warnings.length, 1);
     assert.match(outcome.warnings[0], /instead of/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("vaultStats counts the commits of the branch and the disk the objects take", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-vault-stats-"));
+  try {
+    const { vault } = buildVault(base, 6); // seed + 6 checkpoints = 7 commits
+
+    const stats = vaultStats(vault, "main");
+
+    assert.equal(stats.commits, 7);
+    // six 100 KiB blobs are on disk; the ~40 small loose objects add less than 512 KiB of block rounding
+    assert.ok(stats.bytes >= 6 * BLOB, `${stats.bytes} bytes is less than the six checkpoint blobs`);
+    assert.ok(stats.bytes < 6 * BLOB + 512 * 1024, `${stats.bytes} bytes counts far more than the objects`);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("vaultStats still counts the objects once git has packed them", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-vault-stats-packed-"));
+  try {
+    const { vault } = buildVault(base, 6);
+    run(vault, ["gc", "-q"]); // loose objects are gone, everything sits in a pack
+
+    assert.ok(vaultStats(vault, "main").bytes >= 6 * BLOB, "packed objects must be counted too");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("getVaultStats knows nothing until sync is configured and the vault is cloned, then reads it offline", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-vault-getstats-"));
+  try {
+    const home = join(base, "home");
+    assert.equal(atHome(home, () => getVaultStats()), null, "sync is not configured yet");
+
+    const remote = seedBare(base, "vault-remote");
+    atHome(home, () => initializeSync(remote, KEY));
+    const vault = join(home, "vault");
+    addCheckpoints(vault, 3);
+    run(vault, ["remote", "set-url", "origin", join(base, "unreachable.git")]); // any network access would now fail
+    const before = snapshot(join(vault, ".git"));
+
+    const stats = atHome(home, () => getVaultStats());
+
+    assert.equal(stats.commits, 4); // seed + 3 checkpoints
+    assert.ok(stats.bytes >= 3 * BLOB);
+    assert.deepEqual(snapshot(join(vault, ".git")), before, "reading the stats must not write to the vault");
+
+    rmSync(vault, { recursive: true, force: true });
+    assert.equal(atHome(home, () => getVaultStats()), null, "the vault clone is gone");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+const MiB = 1024 * 1024;
+
+test("assessVault warns only when automation is off and the vault is past 20 commits or 200 MiB", () => {
+  const cases = [
+    { stats: { commits: 11, bytes: 63 * MiB }, level: "ok", why: "a freshly pruned vault" },
+    { stats: { commits: 20, bytes: 63 * MiB }, level: "ok", why: "20 commits is still within the limit" },
+    { stats: { commits: 21, bytes: 63 * MiB }, level: "grown", why: "21 commits is past it" },
+    { stats: { commits: 5, bytes: 200 * MiB }, level: "ok", why: "exactly 200 MiB is still within the limit" },
+    { stats: { commits: 5, bytes: 200 * MiB + 1 }, level: "grown", why: "a few heavy checkpoints can outgrow it with few commits" }
+  ];
+  for (const { stats, level, why } of cases) {
+    assert.equal(assessVault(stats, undefined, {}).level, level, why);
+  }
+});
+
+test("assessVault names the commands that fix a vault that has grown again", () => {
+  const health = assessVault({ commits: 40, bytes: 150 * MiB }, undefined, {});
+
+  assert.equal(health.level, "grown");
+  assert.match(health.detail, /40 commits, 150\.0 MiB/);
+  assert.match(health.detail, /tash sync prune --keep 10/);
+  assert.match(health.detail, /tash autosync prune --keep 10 --yes/);
+});
+
+test("assessVault leaves a big vault alone while automatic pruning is on and healthy", () => {
+  const health = assessVault({ commits: 500, bytes: 5000 * MiB }, { keep: 10 }, { lastResult: "pruned" });
+
+  assert.equal(health.level, "ok", "the scheduled prune is what keeps the vault bounded");
+  assert.match(health.detail, /automatic prune on \(keep 10\)/);
+});
+
+test("assessVault reports a failed automatic prune, but only while the policy is on", () => {
+  const failed = { lastResult: "error", lastError: "The remote refused the rewritten history" };
+
+  const on = assessVault({ commits: 11, bytes: 63 * MiB }, { keep: 7 }, failed);
+  assert.equal(on.level, "prune-failed");
+  assert.match(on.detail, /The remote refused the rewritten history/);
+  assert.match(on.detail, /tash sync prune --keep 7/);
+
+  assert.equal(assessVault({ commits: 11, bytes: 63 * MiB }, undefined, failed).level, "ok", "a stale error must not nag once the policy is off");
+});
+
+test("getVaultHealth reads the real vault and the saved policy, and knows nothing without a vault", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-vault-health-"));
+  try {
+    assert.equal(atHome(join(base, "unconfigured"), () => getVaultHealth()), null);
+
+    const { home } = buildSyncedVault(base, 3); // seed + 3 checkpoints = 4 commits
+    const small = atHome(home, () => getVaultHealth());
+    assert.equal(small.level, "ok");
+    assert.equal(small.commits, 4);
+
+    atHome(home, () => setAutosyncPrune(2));
+    writeFileSync(join(home, "autosync-prune.json"), JSON.stringify({ lastAttemptAt: new Date().toISOString(), lastResult: "error", lastError: "network is down" }));
+    const failed = atHome(home, () => getVaultHealth());
+    assert.equal(failed.level, "prune-failed");
+    assert.match(failed.detail, /network is down/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("tash autosync prune without --yes shows what the first pass would do and saves nothing", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-cli-preview-"));
+  try {
+    const { remote, home } = buildSyncedVault(base, 6); // 7 commits
+    const remoteTip = run(remote, ["rev-parse", "main"]);
+
+    const early = tash(home, ["autosync", "prune", "--keep", "2"]); // rewrites above 4 commits: 7 is past it
+    assert.equal(early.status, 0, early.stderr);
+    assert.match(early.stdout, /would rewrite the remote history/);
+    assert.match(early.stdout, /--yes/);
+    assert.match(early.stdout, /this computer's copy of the vault/, "the preview is made offline, from the local clone");
+
+    const calm = tash(home, ["autosync", "prune", "--keep", "5"]); // rewrites above 10 commits: 7 is not
+    assert.equal(calm.status, 0, calm.stderr);
+    assert.match(calm.stdout, /would not rewrite the remote/);
+
+    assert.equal(atHome(home, () => readAutosyncConfig().prune), undefined, "a preview must not turn the policy on");
+    assert.equal(run(remote, ["rev-parse", "main"]), remoteTip, "a preview must not touch the remote");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("tash autosync prune --yes turns the policy on and still shows the preview", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-cli-yes-policy-"));
+  try {
+    const { home } = buildSyncedVault(base, 6);
+
+    const result = tash(home, ["autosync", "prune", "--keep", "2", "--yes"]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(atHome(home, () => readAutosyncConfig().prune), { keep: 2 });
+    assert.match(result.stdout, /would rewrite the remote history/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("tash autosync prune rejects a bad keep, and without a vault it previews nothing but --yes still saves", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-cli-novault-"));
+  try {
+    const home = join(base, "home");
+
+    const bad = tash(home, ["autosync", "prune", "--keep", "0", "--yes"]);
+    assert.notEqual(bad.status, 0);
+    assert.match(bad.stderr, /keep/);
+    assert.equal(atHome(home, () => readAutosyncConfig().prune), undefined);
+
+    const preview = tash(home, ["autosync", "prune", "--keep", "5"]);
+    assert.equal(preview.status, 0, preview.stderr);
+    assert.match(preview.stdout, /No preview available/);
+    assert.equal(atHome(home, () => readAutosyncConfig().prune), undefined);
+
+    assert.equal(tash(home, ["autosync", "prune", "--keep", "5", "--yes"]).status, 0);
+    assert.deepEqual(atHome(home, () => readAutosyncConfig().prune), { keep: 5 });
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("tash autosync status shows the vault size and warns once it has grown again", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-cli-status-"));
+  try {
+    const small = buildSyncedVault(join(mkdtempSync(join(base, "a-")), ""), 3);
+    const quiet = tash(small.home, ["autosync", "status"]);
+    assert.equal(quiet.status, 0, quiet.stderr);
+    assert.match(quiet.stdout, /Vault: 4 commits/);
+    assert.doesNotMatch(quiet.stdout, /grown again/);
+
+    const big = buildSyncedVault(mkdtempSync(join(base, "b-")), 21); // 22 commits: past the 20-commit limit
+    const loud = tash(big.home, ["autosync", "status"]);
+    assert.match(loud.stdout, /Vault: 22 commits/);
+    assert.match(loud.stdout, /grown again/);
+    assert.match(loud.stdout, /tash autosync prune --keep 10 --yes/);
+
+    const none = tash(join(base, "no-sync-here"), ["autosync", "status"]);
+    assert.equal(none.status, 0, none.stderr);
+    assert.doesNotMatch(none.stdout, /Vault: \d/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// Like atHome, for async code that has to keep seeing that computer's ~/.tashevos until it settles.
+async function atHomeAsync(home, fn) {
+  const previous = process.env.TASHEVOS_HOME;
+  process.env.TASHEVOS_HOME = home;
+  try { return await fn(); }
+  finally {
+    if (previous === undefined) delete process.env.TASHEVOS_HOME;
+    else process.env.TASHEVOS_HOME = previous;
+  }
+}
+
+test("doctor reports the vault, and warns (never fails) once it has grown again", async () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-doctor-vault-"));
+  try {
+    const project = join(base, "project");
+    mkdirSync(project);
+    run(base, ["init", "-q", project]);
+    const vaultCheck = async (home) => (await atHomeAsync(home, () => runDoctor(project, false))).find((check) => check.id === "vault");
+
+    const small = buildSyncedVault(mkdtempSync(join(base, "a-")), 3);
+    const ok = await vaultCheck(small.home);
+    assert.equal(ok.health, "ok");
+    assert.equal(ok.label, "Encrypted vault");
+    assert.match(ok.detail, /^4 commits, /);
+
+    const big = buildSyncedVault(mkdtempSync(join(base, "b-")), 21); // 22 commits: past the 20-commit limit
+    const grown = await vaultCheck(big.home);
+    assert.equal(grown.health, "warn", "a vault that merely grew must not fail the doctor");
+    assert.match(grown.detail, /grown again/);
+
+    assert.equal(await vaultCheck(join(base, "no-sync-here")), undefined, "no vault check without a configured vault");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("the MCP status tool tells an AI agent when the vault has grown again, so it can say so at session start", async () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-mcp-vault-"));
+  const server = createTashevMcpServer();
+  const client = new Client({ name: "tashevos-test", version: "1.0.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  try {
+    const project = join(base, "project");
+    mkdirSync(project);
+    run(base, ["init", "-q", project]);
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    const status = async (home) => atHomeAsync(home, async () => {
+      const result = await client.callTool({ name: "tashevos_status", arguments: { path: project } });
+      return JSON.parse(result.content.find((item) => item.type === "text").text);
+    });
+
+    const big = buildSyncedVault(mkdtempSync(join(base, "big-")), 21); // 22 commits: past the 20-commit limit
+    const grown = (await status(big.home)).vault;
+    assert.equal(grown.level, "grown");
+    assert.match(grown.detail, /tash autosync prune --keep 10 --yes/);
+
+    const small = buildSyncedVault(mkdtempSync(join(base, "small-")), 3);
+    assert.equal((await status(small.home)).vault.level, "ok");
+
+    assert.equal((await status(join(base, "no-sync-here"))).vault, null, "no vault, nothing to warn about");
+  } finally {
+    await client.close().catch(() => {});
+    await server.close().catch(() => {});
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("a pass that finds nothing to rewrite does not use up the day: once the history passes 2 x keep the next pass rewrites it", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-tick-slot-"));
+  try {
+    const { remote, home, vault } = buildSyncedVault(base, 4); // 5 commits
+    atHome(home, () => setAutosyncPrune(3)); // rewrites only above 6 commits
+
+    const early = atHome(home, () => runAutosyncTick());
+    assert.equal(early.prune.result, "reclaimed");
+    assert.equal(run(remote, ["rev-list", "--count", "main"]), "5");
+
+    addCheckpoints(vault, 3, 100); // autosync keeps checkpointing: the vault now holds 8 commits
+    run(vault, ["push", "-q", "origin", "main"]);
+
+    const next = atHome(home, () => runAutosyncTick()); // no waiting for tomorrow
+    assert.equal(next.prune.result, "pruned");
+    assert.equal(run(remote, ["rev-list", "--count", "main"]), "3");
+
+    addCheckpoints(vault, 8, 200); // growing past the limit again straight away ...
+    run(vault, ["push", "-q", "origin", "main"]);
+    const again = atHome(home, () => runAutosyncTick());
+    assert.equal(again.prune.result, "not-due", "... still waits out the 24 hours after a rewrite");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("between daily passes a short history is checked without any network access", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-tick-offline-"));
+  try {
+    const { home, vault } = buildSyncedVault(base, 3); // 4 commits
+    atHome(home, () => setAutosyncPrune(5)); // rewrites only above 10 commits
+    assert.equal(atHome(home, () => runAutosyncTick()).prune.result, "reclaimed");
+    run(vault, ["remote", "set-url", "origin", join(base, "unreachable.git")]); // any network use would now fail
+
+    const second = atHome(home, () => runAutosyncTick());
+
+    assert.equal(second.prune.result, "not-due");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("turning the automatic prune back on forgets an old failure instead of showing it at once", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-reenable-"));
+  try {
+    const { home } = buildSyncedVault(base, 3);
+    atHome(home, () => setAutosyncPrune(2));
+    writeFileSync(join(home, "autosync-prune.json"), JSON.stringify({ lastAttemptAt: new Date().toISOString(), lastResult: "error", lastError: "network is down" }));
+    assert.equal(atHome(home, () => getVaultHealth()).level, "prune-failed");
+
+    atHome(home, () => setAutosyncPrune(null));
+    atHome(home, () => setAutosyncPrune(2));
+
+    assert.equal(atHome(home, () => getVaultHealth()).level, "ok", "a stale failure must not greet the owner who just turned it back on");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("the vault checks survive config and state files that hold a bare null", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-nullfiles-"));
+  try {
+    const { home } = buildSyncedVault(base, 3);
+    writeFileSync(join(home, "autosync.json"), "null");
+    writeFileSync(join(home, "autosync-prune.json"), "null");
+    assert.equal(atHome(home, () => getVaultHealth()).level, "ok");
+    assert.equal(atHome(home, () => readAutosyncConfig().projects.length), 0, "a null config reads as an empty one");
+
+    writeFileSync(join(home, "autosync.json"), JSON.stringify({ prune: { keep: 2 } })); // policy on, state file still null
+    assert.equal(atHome(home, () => getVaultHealth()).level, "ok");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("the autosync prune preview admits that another computer may have outgrown this computer's copy", () => {
+  const base = mkdtempSync(join(tmpdir(), "tashevos-prune-stale-preview-"));
+  try {
+    const { remote, home } = buildSyncedVault(base, 6); // 7 commits here
+    const other = cloneDevice(base, remote, "other-computer");
+    addCheckpoints(other, 12, 100);
+    run(other, ["push", "-q", "origin", "main"]); // the remote has 19 commits, this computer has not fetched them
+
+    const preview = tash(home, ["autosync", "prune", "--keep", "5"]); // rewrites above 10 commits
+
+    assert.match(preview.stdout, /would not rewrite the remote/, "the local copy of 7 commits looks short");
+    assert.match(preview.stdout, /another computer has checkpointed since/);
   } finally {
     rmSync(base, { recursive: true, force: true });
   }

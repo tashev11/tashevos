@@ -117,7 +117,7 @@ tash resume
 
 **Autosync работает только по изменениям:** fingerprint учитывает Git HEAD, staged, unstaged и безопасные untracked-файлы. Если состояние не менялось — новый checkpoint не создаётся. Secret-like файлы не вызывают синхронизацию, а ручной checkpoint не дублируется следующим фоновым проходом. На macOS используется `launchd`, на Linux — пользовательский `systemd` timer; на других системах можно запускать `tash autosync tick` через любой планировщик.
 
-**История vault ограничивается по команде.** Зашифрованные checkpoint не сжимаются, поэтому каждая версия остаётся в истории целиком. `tash sync prune --keep 10` оставляет последние checkpoint и освобождает остальное; без `--yes` только показывает, сколько места освободится. `tash autosync prune --keep 10` включает то же в autosync (по умолчанию выключено). Подробности: [docs/VAULT_PRUNING.md](docs/VAULT_PRUNING.md).
+**История vault ограничивается по команде.** Зашифрованные checkpoint не сжимаются, поэтому каждая версия остаётся в истории целиком. `tash sync prune --keep 10` оставляет последние checkpoint и освобождает остальное; без `--yes` только показывает, сколько места освободится. `tash autosync prune --keep 10 --yes` включает то же в autosync (по умолчанию выключено; без `--yes` только показывает, что сделает первый проход), а `tash autosync status` и `tash doctor` предупреждают, когда vault снова вырос. Подробности: [docs/VAULT_PRUNING.md](docs/VAULT_PRUNING.md).
 
 ## Что уже работает
 

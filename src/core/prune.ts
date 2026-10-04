@@ -2,6 +2,9 @@ import { spawnSync } from "node:child_process";
 
 export const DEFAULT_PRUNE_KEEP = 10;
 export const MAX_PRUNE_KEEP = 10_000;
+// A vault past either limit has grown again: the history is where the scheduled prune would start rewriting it.
+export const VAULT_WARN_COMMITS = 2 * DEFAULT_PRUNE_KEEP;
+export const VAULT_WARN_BYTES = 200 * 1024 * 1024;
 
 export interface PrunePlan {
   branch: string;
@@ -213,4 +216,14 @@ export function applyPrune(vault: string, plan: PrunePlan): PruneOutcome {
 
   const bytesAfter = storageBytes(vault);
   return { newTip, pushed: plan.rewrite, bytesBefore, bytesAfter, bytesFreed: Math.max(0, bytesBefore - bytesAfter), warnings };
+}
+
+// What a vault clone costs right now: commits on the branch and the disk its objects take (loose + packed).
+export function vaultStats(vault: string, branch: string): { commits: number; bytes: number } {
+  assertBranch(branch);
+  return { commits: Number(git(vault, ["rev-list", "--first-parent", "--count", `refs/heads/${branch}`])), bytes: storageBytes(vault) };
+}
+
+export function formatMiB(bytes: number): string {
+  return (bytes / 1048576).toFixed(1) + " MiB";
 }

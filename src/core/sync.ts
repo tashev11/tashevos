@@ -7,7 +7,7 @@ import { gzipSync, gunzipSync } from "node:zlib";
 import { DATA_DIR, appendEvent, initializeStore, readRecentEvents, updateState } from "./store.js";
 import { getGitSnapshot } from "../lib/git.js";
 import { ensureDir, readJson, writeJson } from "../lib/fs.js";
-import { DEFAULT_PRUNE_KEEP, applyPrune, assertKeep, planPrune } from "./prune.js";
+import { DEFAULT_PRUNE_KEEP, applyPrune, assertKeep, planPrune, vaultStats } from "./prune.js";
 import type { PruneOutcome, PrunePlan } from "./prune.js";
 
 const SYNC_SCHEMA = 1;
@@ -510,4 +510,15 @@ export function pruneVault(options: { keep?: number; apply?: boolean; rewriteAbo
   refreshVault(config);
   const plan = planPrune(vault, config.branch, keep, options.rewriteAbove);
   return { plan, applied: true, outcome: applyPrune(vault, plan) };
+}
+
+// Offline and read-only: how big the local vault clone is. Null until sync is configured and the vault is cloned.
+export function getVaultStats(): { commits: number; bytes: number } | null {
+  let config: SyncConfig;
+  try { config = readSyncConfig(); }
+  catch { return null; }
+  const vault = vaultPath();
+  if (!existsSync(join(vault, ".git"))) return null;
+  try { return vaultStats(vault, config.branch); }
+  catch { return null; }
 }
